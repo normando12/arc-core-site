@@ -1,0 +1,19 @@
+{
+  "name": "akkk-root",
+  "private": true,
+  "description": "Proxy scripts — the Next.js app lives in b_IzI4IgoiyPg/",
+  "scripts": {
+    "dev": "npm --prefix b_IzI4IgoiyPg run dev",
+    "dev:host": "npm --prefix b_IzI4IgoiyPg run dev:host",
+    "build": "npm --prefix b_IzI4IgoiyPg run build",
+    "start": "npm --prefix b_IzI4IgoiyPg run start",
+    "start:host": "npm --prefix b_IzI4IgoiyPg run start:host",
+    "install:app": "npm install --prefix b_IzI4IgoiyPg",
+    "lint": "npm --prefix b_IzI4IgoiyPg run lint",
+    "vercel:login": "npx vercel@latest login",
+    "vercel:link": "npx vercel@latest link --cwd b_IzI4IgoiyPg",
+    "vercel:link:repo": "npx vercel@latest link --repo",
+    "vercel:preview": "npx vercel@latest deploy --cwd b_IzI4IgoiyPg",
+    "vercel:prod": "npx vercel@latest deploy --cwd b_IzI4IgoiyPg --prod"
+  }
+}
