@@ -7,3 +7,6 @@ node_modules/
 Thumbs.db
 *.log
 *.zip
+
+# Pasta de exportação para novo repo GitHub/Vercel (cópia da app)
+git123/
