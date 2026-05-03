@@ -717,9 +717,14 @@ export function ArcDApp() {
           </p>
         </header>
 
-        {configured && isConnected && address && (
+        {configured && (
           <section className="mb-16 max-w-3xl mx-auto rounded-2xl border border-white/10 bg-gradient-to-br from-[#0d1a2d]/95 via-[#0a1628] to-[#0f2240]/90 p-[1px] shadow-[0_0_48px_-8px_rgba(77,136,255,0.25)]">
             <div className="rounded-2xl bg-[#070f1a]/85 backdrop-blur-md px-5 py-6 sm:px-8 sm:py-8">
+              {(!isConnected || !address) && (
+                <p className="text-center text-[11px] text-arc-cyan/95 mb-5 font-mono uppercase tracking-wide border border-arc-cyan/25 rounded-lg py-2.5 px-3 bg-arc-cyan/5">
+                  Connect your wallet on Arc Testnet to load your on-chain score, SAY GM waves, and vote.
+                </p>
+              )}
               <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-2 text-arc-cyan">
                   <Gauge className="w-5 h-5 shrink-0" aria-hidden />
@@ -761,7 +766,7 @@ export function ArcDApp() {
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                     <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">Score</span>
                     <span className="text-3xl font-bold tabular-nums text-white tracking-tight">
-                      {presenceScoreDisplay}
+                      {address ? presenceScoreDisplay : "—"}
                     </span>
                   </div>
                 </div>
@@ -807,11 +812,13 @@ export function ArcDApp() {
                         Vote weight (chamber tally)
                       </span>
                       <span className="text-xl font-bold text-arc-green tabular-nums">
-                        {(voteWeightBps / 100).toFixed(1)}×
+                        {address ? `${(voteWeightBps / 100).toFixed(1)}×` : "—"}
                       </span>
                     </div>
                     <p className="text-[10px] text-white/35 mt-2 font-mono uppercase tracking-wider">
-                      SAY GM today · {gmBurstsTodayEffective}/10 waves (UTC) · {gmBurstsRemaining} left
+                      {address
+                        ? `SAY GM today · ${gmBurstsTodayEffective}/10 waves (UTC) · ${gmBurstsRemaining} left`
+                        : "SAY GM today · connect wallet to track waves (UTC)"}
                     </p>
                     <div className="flex gap-1 mt-3">
                       {Array.from({ length: 10 }, (_, i) => (
