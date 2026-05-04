@@ -10,3 +10,22 @@ Thumbs.db
 
 # Pasta de exportação para novo repo GitHub/Vercel (cópia da app)
 git123/
+
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+next.user-config.*
+
+# Environment variables (app)
+.env*.local
+
+# Next.js / build
+.next/
+*.tsbuildinfo
+
+# Hardhat
+cache/
+artifacts/
