@@ -508,7 +508,7 @@ export function ArcDApp() {
   }
 
   const walletLabel = useMemo(() => {
-    if (!isConnected || !address) return "CONNECT PROTOCOL"
+    if (!isConnected || !address) return "CONNECT WALLET"
     return shortHex(address, 6, 4).toUpperCase()
   }, [isConnected, address])
 
@@ -651,7 +651,7 @@ export function ArcDApp() {
         </div>
       </div>
 
-      <nav className="fixed top-10 w-full z-50 border-b border-white/10 backdrop-blur-xl bg-[#0a1628]/80">
+      <nav className="relative w-full z-10 border-b border-white/10 backdrop-blur-xl bg-[#0a1628]/80">
         <div className="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <img
@@ -697,13 +697,13 @@ export function ArcDApp() {
               className="px-5 py-2 border border-white/10 rounded-full text-xs font-mono font-medium tracking-wider uppercase hover:bg-arc-blue hover:text-black hover:border-arc-blue transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
             >
               <Wallet size={16} />
-              {connectBusy ? "…" : isConnected ? walletLabel : "CONNECT PROTOCOL"}
+              {connectBusy ? "…" : isConnected ? walletLabel : "CONNECT WALLET"}
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="pt-40 pb-20 max-w-5xl mx-auto px-6">
+      <main className="pt-12 pb-20 max-w-5xl mx-auto px-6">
         <header className="text-center mb-20">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
