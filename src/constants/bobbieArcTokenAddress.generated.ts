@@ -1,2 +1,2 @@
 // AUTO-GENERATED — scripts/deploy-bobbie-swap.js
-export const bobbieArcTokenAddress = "0x12c9605e24D4ff039607DF5D363932dC1AD664EF" as `0x${string}`;
+export const bobbieArcTokenAddress = "0xC82c26533a2824b307a5654027Bb7716857A7a91" as `0x${string}`;

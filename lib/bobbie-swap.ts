@@ -12,6 +12,12 @@ export function quoteArcOutFromUsdc(usdcAmountBaseUnits: bigint): bigint {
   return (usdcAmountBaseUnits * BOBBIE_SWAP_RATE_NUM * 10n ** 12n) / BOBBIE_SWAP_RATE_DEN
 }
 
+/** USDC out (6 decimals) from ARC amount (18 decimals wei). Matches `BobbieArcSwap.quoteUsdcOut`. */
+export function quoteUsdcOutFromArc(arcAmountBaseUnits: bigint): bigint {
+  if (arcAmountBaseUnits <= 0n) return 0n
+  return (arcAmountBaseUnits * BOBBIE_SWAP_RATE_DEN) / (BOBBIE_SWAP_RATE_NUM * 10n ** 12n)
+}
+
 const ZERO = "0x0000000000000000000000000000000000000000" as Address
 
 export function getBobbieSwapAddress(): Address | null {
@@ -32,7 +38,7 @@ export function isBobbieSwapConfigured(): boolean {
   return getBobbieSwapAddress() !== null
 }
 
-/** Minimal ABI for BobbieArcSwap.swapUsdcForArc + quoteArcOut */
+/** Minimal ABI for BobbieArcSwap two-way swap + quotes */
 export const bobbieSwapAbi = [
   {
     type: "function",
@@ -46,9 +52,26 @@ export const bobbieSwapAbi = [
   },
   {
     type: "function",
+    name: "swapArcForUsdc",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "arcAmount", type: "uint256" },
+      { name: "minUsdcOut", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "quoteArcOut",
     stateMutability: "view",
     inputs: [{ name: "usdcAmount", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "quoteUsdcOut",
+    stateMutability: "view",
+    inputs: [{ name: "arcAmount", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const

@@ -65,6 +65,12 @@ function optionalArcTokenMeta(): ArcPortfolioTokenMeta | null {
   return null
 }
 
+/** ARC demo ERC-20 linked to BobbieArcSwap (env or bundled codegen). Used for ARC→USDC + portfolio. */
+export function getBobbieArcTokenAddress(): Address | null {
+  const arc = optionalArcTokenMeta()
+  return arc?.address ?? null
+}
+
 /** Ordered list of Arc Testnet ERC-20 balances to show in portfolio UI. */
 export function buildArcPortfolioTokenList(): ArcPortfolioTokenMeta[] {
   const arc = optionalArcTokenMeta()

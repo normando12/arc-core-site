@@ -2,9 +2,12 @@
  * Deploy MockArcToken + BobbieArcSwap on Arc Testnet.
  * Requires PRIVATE_KEY and (optionally) ARC_TESTNET_RPC_URL in .env
  *
- * After deploy, set in Vercel / .env.local:
+ * Contract pair supports USDC→ARC (mint) and ARC→USDC (burn + return pool USDC). Redeploy after any Solidity change —
+ * codegen updates bundled addresses below.
+ *
+ * Optional overrides in .env / Vercel:
  *   NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS=0x...
- *   NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=0x...   (same as MockArcToken)
+ *   NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=0x...
  *   NEXT_PUBLIC_ARC_ERC20_DECIMALS=18
  */
 const USDC_ARC_TESTNET = "0x3600000000000000000000000000000000000000"
@@ -42,14 +45,17 @@ async function main() {
   const fs = require("fs")
   const path = require("path")
   const constantsDir = path.join(__dirname, "..", "src", "constants")
+  const tsAddrType = "`0x${string}`"
   fs.writeFileSync(
     path.join(constantsDir, "bobbieSwapAddress.generated.ts"),
-    `// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\nexport const bobbieSwapAddress = "${swapAddr}" as \\`0x\\${string}\\`;\n`,
+    "// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\n" +
+      `export const bobbieSwapAddress = "${swapAddr}" as ${tsAddrType};\n`,
     "utf8",
   )
   fs.writeFileSync(
     path.join(constantsDir, "bobbieArcTokenAddress.generated.ts"),
-    `// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\nexport const bobbieArcTokenAddress = "${tokenAddr}" as \\`0x\\${string}\\`;\n`,
+    "// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\n" +
+      `export const bobbieArcTokenAddress = "${tokenAddr}" as ${tsAddrType};\n`,
     "utf8",
   )
   console.log("[ARC//_CODEGEN] src/constants/bobbieSwapAddress.generated.ts + bobbieArcTokenAddress.generated.ts")

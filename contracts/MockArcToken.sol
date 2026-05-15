@@ -35,6 +35,17 @@ contract MockArcToken {
         emit Transfer(address(0), to, amount);
     }
 
+    /// @notice Burn ARC from a wallet when redeemed for USDC (only BobbieArcSwap).
+    function burnFromHolder(address holder, uint256 amount) external {
+        require(msg.sender == swap, "ARC//_BURN_AUTH");
+        require(balanceOf[holder] >= amount, "ARC//_BAL");
+        unchecked {
+            balanceOf[holder] -= amount;
+            totalSupply -= amount;
+        }
+        emit Transfer(holder, address(0), amount);
+    }
+
     function approve(address spender, uint256 amount) external returns (bool) {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);

@@ -75,8 +75,14 @@ import { playTxSuccessSound } from "@/lib/tx-success-sound"
 import { cn } from "@/lib/utils"
 import { useArcLiveStatus } from "@/hooks/use-arc-live-status"
 import { useArcPortfolioBalances, type ArcPortfolioState } from "@/hooks/use-arc-portfolio-balances"
-import { bobbieSwapAbi, getBobbieSwapAddress, isBobbieSwapConfigured, quoteArcOutFromUsdc } from "@/lib/bobbie-swap"
-import { ARC_TESTNET_USDC, buildArcPortfolioTokenList } from "@/lib/arc-testnet-portfolio"
+import {
+  bobbieSwapAbi,
+  getBobbieSwapAddress,
+  isBobbieSwapConfigured,
+  quoteArcOutFromUsdc,
+  quoteUsdcOutFromArc,
+} from "@/lib/bobbie-swap"
+import { ARC_TESTNET_USDC, buildArcPortfolioTokenList, getBobbieArcTokenAddress } from "@/lib/arc-testnet-portfolio"
 
 type ChatMessage = {
   id: string
@@ -882,6 +888,7 @@ export function ArcAICopilot() {
   const { data: arcLive, loading: arcLiveLoading } = useArcLiveStatus()
   const portfolio = useArcPortfolioBalances()
   const swapBalanceMap = useMemo(() => buildSwapBalanceMap(portfolio), [portfolio])
+  const arcTokenConfigured = useMemo(() => getBobbieArcTokenAddress() !== null, [])
   const chainReady = Boolean(isConnected && address && chainId === arcTestnet.id)
 
   const sealGmBurstOnArc = useCallback(async (): Promise<boolean> => {
@@ -974,8 +981,17 @@ export function ArcAICopilot() {
         })
         return false
       }
-      if (payload.fromSymbol !== "USDC" || payload.toSymbol !== "ARC") {
-        toast.error("Unsupported pair — only USDC → ARC is wired.")
+      const forward = payload.fromSymbol === "USDC" && payload.toSymbol === "ARC"
+      const reverse = payload.fromSymbol === "ARC" && payload.toSymbol === "USDC"
+      if (!forward && !reverse) {
+        toast.error("Unsupported pair — only USDC ↔ ARC on Arc Testnet.")
+        return false
+      }
+
+      if (reverse && !getBobbieArcTokenAddress()) {
+        toast.error("ARC demo token not configured", {
+          description: "Redeploy with npm run deploy:bobbieswap or set NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS.",
+        })
         return false
       }
 
@@ -1019,56 +1035,99 @@ export function ArcAICopilot() {
         return false
       }
 
-      let usdcAmount: bigint
       try {
-        usdcAmount = parseUnits(payload.fromAmount.replace(",", "."), ARC_TESTNET_USDC.decimals)
-      } catch {
-        toast.error("Invalid amount")
-        return false
-      }
+        if (forward) {
+          let usdcAmount: bigint
+          try {
+            usdcAmount = parseUnits(payload.fromAmount.replace(",", "."), ARC_TESTNET_USDC.decimals)
+          } catch {
+            toast.error("Invalid amount")
+            return false
+          }
 
-      const usdcRow = portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === "USDC") : undefined
-      if (!usdcRow || usdcAmount > usdcRow.balance) {
-        toast.error("Insufficient USDC balance")
-        return false
-      }
+          const usdcRow = portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === "USDC") : undefined
+          if (!usdcRow || usdcAmount > usdcRow.balance) {
+            toast.error("Insufficient USDC balance")
+            return false
+          }
 
-      const expectedArc = quoteArcOutFromUsdc(usdcAmount)
-      const minArcOut = (expectedArc * 99n) / 100n
+          const expectedArc = quoteArcOutFromUsdc(usdcAmount)
+          const minArcOut = (expectedArc * 99n) / 100n
 
-      try {
-        const allowance = await publicClient.readContract({
-          address: ARC_TESTNET_USDC.address,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [signingAddress, swapAddr],
-        })
-
-        if (allowance < usdcAmount) {
-          const hApprove = await writeContractAsync({
+          const allowance = await publicClient.readContract({
             address: ARC_TESTNET_USDC.address,
             abi: erc20Abi,
-            functionName: "approve",
-            args: [swapAddr, usdcAmount],
+            functionName: "allowance",
+            args: [signingAddress, swapAddr],
+          })
+
+          if (allowance < usdcAmount) {
+            const hApprove = await writeContractAsync({
+              address: ARC_TESTNET_USDC.address,
+              abi: erc20Abi,
+              functionName: "approve",
+              args: [swapAddr, usdcAmount],
+              chainId: arcTestnet.id,
+              account: signingAddress,
+            })
+            await publicClient.waitForTransactionReceipt({ hash: hApprove, chainId: arcTestnet.id })
+          }
+
+          const hash = await writeContractAsync({
+            address: swapAddr,
+            abi: bobbieSwapAbi,
+            functionName: "swapUsdcForArc",
+            args: [usdcAmount, minArcOut],
             chainId: arcTestnet.id,
             account: signingAddress,
           })
-          await publicClient.waitForTransactionReceipt({ hash: hApprove, chainId: arcTestnet.id })
+          await publicClient.waitForTransactionReceipt({ hash, chainId: arcTestnet.id })
+          toast.success("Swap confirmed — balances updating", {
+            description: (
+              <a href={ARC_EXPLORER_TX(hash)} target="_blank" rel="noreferrer" className="underline">
+                ArcScan · {shortHex(hash)}
+              </a>
+            ),
+          })
+          void playTxSuccessSound()
+          portfolio.refetch()
+          return true
         }
 
-        const hash = await writeContractAsync({
+        let arcAmount: bigint
+        try {
+          arcAmount = parseUnits(payload.fromAmount.replace(",", "."), 18)
+        } catch {
+          toast.error("Invalid amount")
+          return false
+        }
+
+        const arcRow = portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === "ARC") : undefined
+        if (!arcRow || arcAmount > arcRow.balance) {
+          toast.error("Insufficient ARC balance")
+          return false
+        }
+
+        const expectedUsdc = quoteUsdcOutFromArc(arcAmount)
+        const minUsdcOut = (expectedUsdc * 99n) / 100n
+        if (minUsdcOut === 0n) {
+          toast.error("Amount rounds to zero USDC on-chain — enter a slightly larger ARC amount.")
+          return false
+        }
+
+        const revHash = await writeContractAsync({
           address: swapAddr,
           abi: bobbieSwapAbi,
-          functionName: "swapUsdcForArc",
-          args: [usdcAmount, minArcOut],
+          functionName: "swapArcForUsdc",
+          args: [arcAmount, minUsdcOut],
           chainId: arcTestnet.id,
           account: signingAddress,
         })
-        await publicClient.waitForTransactionReceipt({ hash, chainId: arcTestnet.id })
+        await publicClient.waitForTransactionReceipt({ hash: revHash, chainId: arcTestnet.id })
         toast.success("Swap confirmed — balances updating", {
           description: (
-            <a href={ARC_EXPLORER_TX(hash)} target="_blank" rel="noreferrer" className="underline">
-              ArcScan · {shortHex(hash)}
+            <a href={ARC_EXPLORER_TX(revHash)} target="_blank" rel="noreferrer" className="underline">
+              ArcScan · {shortHex(revHash)}
             </a>
           ),
         })
@@ -1495,7 +1554,7 @@ export function ArcAICopilot() {
                       </div>
                     </div>
                     <div className="mt-2 text-center text-[11px] text-white/35">
-                      USDC → ARC swap signs a real <span className="text-white/55">BobbieArcSwap</span> on Arc (approve + swap). SAY GM stays under Settings → demo tx (
+                      USDC ↔ ARC swap signs real <span className="text-white/55">BobbieArcSwap</span> on Arc (approve + swap). SAY GM stays under Settings → demo tx (
                       <span className="text-white/55">emitGmBurst</span>).
                     </div>
                   </div>
@@ -1526,6 +1585,7 @@ export function ArcAICopilot() {
         draft={swapDraft}
         chainReady={chainReady}
         swapConfigured={isBobbieSwapConfigured()}
+        arcTokenConfigured={arcTokenConfigured}
         balances={swapBalanceMap}
         onOpenChange={(v) => {
           setSwapOpen(v)
@@ -1545,7 +1605,13 @@ export function ArcAICopilot() {
         }}
         sendLabel={txPreview.send}
         receiveLabel={txPreview.receive}
-        txKind={pendingTx.kind === "swap" ? "usdc_arc_swap" : "governance_gm_burst"}
+        txKind={
+          pendingTx.kind === "swap"
+            ? pendingTx.payload.fromSymbol === "USDC"
+              ? "swap_usdc_for_arc"
+              : "swap_arc_for_usdc"
+            : "governance_gm_burst"
+        }
         onAccept={confirmPendingTx}
       />
       <AiExecutionProgressModal open={progressOpen} onOpenChange={setProgressOpen} />
