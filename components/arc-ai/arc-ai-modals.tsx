@@ -23,8 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { formatUnits, parseUnits } from "viem"
 import { estimateMockReceive, SWAP_SYMBOLS, type SwapDraft, type SwapSymbol } from "@/lib/arc-ai-parse-swap"
 import { cn } from "@/lib/utils"
+
+function parseHumanAmountUnits(amountRaw: string, decimals: number): bigint | null {
+  const s = amountRaw.replace(",", ".").trim()
+  if (!s || !/^\d+(\.\d+)?$/u.test(s)) return null
+  try {
+    return parseUnits(s, decimals)
+  } catch {
+    return null
+  }
+}
 
 const DEFAULT_DRAFT: SwapDraft = {
   fromSymbol: "USDC",
@@ -44,12 +55,20 @@ export function SwapModal({
   onOpenChange,
   draft,
   onConfirm,
+  chainReady,
+  swapConfigured,
+  balances,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   /** When null, uses USDC → ARC and 100 */
   draft: SwapDraft | null
   onConfirm: (payload: SwapConfirmPayload) => void
+  /** Connected wallet on Arc Testnet */
+  chainReady: boolean
+  /** `NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS` deployed */
+  swapConfigured: boolean
+  balances: Partial<Record<SwapSymbol, { balance: bigint; decimals: number }>>
 }) {
   const [from, setFrom] = useState<SwapSymbol>(DEFAULT_DRAFT.fromSymbol)
   const [to, setTo] = useState<SwapSymbol>(DEFAULT_DRAFT.toSymbol)
@@ -70,6 +89,26 @@ export function SwapModal({
   }, [amount, from, to])
 
   const routeText = `${from} → ${from}/${to} pool → ${to}`
+
+  const onChainPair = from === "USDC" && to === "ARC"
+  const fromMeta = balances[from]
+  const parsedIn = useMemo(() => {
+    if (!fromMeta) return null
+    return parseHumanAmountUnits(amount, fromMeta.decimals)
+  }, [amount, fromMeta])
+
+  const insufficient =
+    onChainPair && chainReady && swapConfigured && fromMeta != null && parsedIn !== null && parsedIn > fromMeta.balance
+
+  const reviewDisabled =
+    receive === "—" ||
+    !onChainPair ||
+    !swapConfigured ||
+    !chainReady ||
+    fromMeta == null ||
+    parsedIn === null ||
+    parsedIn <= 0n ||
+    insufficient
 
   const onFromChange = (v: SwapSymbol) => {
     setFrom(v)
@@ -94,14 +133,44 @@ export function SwapModal({
             <span className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5">
               <ArrowDownUp className="size-4 text-[var(--arc-neon-cyan)]" />
             </span>
-            Swap tokens (preview)
+            Swap (USDC → ARC)
           </DialogTitle>
           <DialogDescription className="text-white/55">
-            Route and amounts are estimates only. When you confirm the next step, your wallet signs a real{" "}
-            <span className="text-white/75">ArcGovernance.emitGmBurst</span> on Arc Testnet (Proof of Presence — USDC gas).
+            On Arc Testnet this app executes a real <span className="text-white/75">BobbieArcSwap</span> call: USDC is pulled from
+            your wallet (with <span className="text-white/75">approve</span> if needed) and ARC demo tokens are minted to you at the
+            fixed rate shown below. Gas is paid in native USDC.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-1">
+          {!swapConfigured ? (
+            <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/95">
+              Deploy the swap contract and set{" "}
+              <span className="font-mono text-white/80">NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS</span> (and matching{" "}
+              <span className="font-mono text-white/80">NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS</span>) — run{" "}
+              <span className="font-mono">npm run deploy:bobbieswap</span> on Arc Testnet.
+            </div>
+          ) : null}
+          {!chainReady ? (
+            <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/95">
+              Connect your wallet on <span className="text-white/90">Arc Testnet</span> to load balances and sign the swap.
+            </div>
+          ) : null}
+          {onChainPair && fromMeta ? (
+            <div className="text-xs text-white/45">
+              Wallet <span className="text-white/70">USDC</span> balance (ERC-20 view):{" "}
+              <span className="font-mono text-white/85">{formatUnits(fromMeta.balance, fromMeta.decimals)} USDC</span>
+            </div>
+          ) : null}
+          {!onChainPair ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/55">
+              Only <span className="text-white/80">USDC → ARC</span> is executable on-chain in this build. Pick USDC as “From” and ARC as “To”.
+            </div>
+          ) : null}
+          {insufficient ? (
+            <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/95">
+              Amount exceeds your USDC balance — reduce the amount or add USDC on Arc Testnet.
+            </div>
+          ) : null}
           <div className="grid gap-2">
             <Label className="text-white/60">From</Label>
             <div className="flex gap-2">
@@ -148,8 +217,8 @@ export function SwapModal({
             </div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/55">
-            Route: {routeText} · Slippage 0.5% · Est. gas{" "}
-            <span className="text-[var(--arc-neon-cyan)]">0.0021 ARC</span>
+            Route: {routeText} · Max slip 1% on-chain · Est. gas{" "}
+            <span className="text-[var(--arc-neon-cyan)]">USDC (native)</span>
           </div>
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
@@ -161,7 +230,16 @@ export function SwapModal({
             Cancel
           </Button>
           <Button
-            disabled={receive === "—"}
+            disabled={reviewDisabled}
+            title={
+              insufficient
+                ? "Amount higher than wallet USDC balance"
+                : !onChainPair
+                  ? "Select USDC → ARC"
+                  : !swapConfigured
+                    ? "Configure swap contract address"
+                    : undefined
+            }
             className="bg-gradient-to-r from-[var(--arc-neon-cyan)] to-[var(--arc-neon-purple)] text-black hover:opacity-95 disabled:opacity-40"
             onClick={() => {
               const amt = amount.replace(",", ".")
@@ -188,6 +266,7 @@ export function TransactionConfirmModal({
   onAccept,
   sendLabel,
   receiveLabel,
+  txKind,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -195,6 +274,7 @@ export function TransactionConfirmModal({
   onAccept: () => Promise<boolean>
   sendLabel: string
   receiveLabel: string
+  txKind: "usdc_arc_swap" | "governance_gm_burst"
 }) {
   const [pending, setPending] = useState(false)
 
@@ -218,8 +298,18 @@ export function TransactionConfirmModal({
             Confirm transaction
           </DialogTitle>
           <DialogDescription className="text-white/55">
-            Your wallet will broadcast <span className="text-white/75">emitGmBurst</span> on ArcGovernance (real Arc Testnet
-            transaction, USDC gas). Swap lines above are a preview, not a DEX trade.
+            {txKind === "usdc_arc_swap" ? (
+              <>
+                Your wallet may first sign <span className="text-white/75">USDC.approve</span> for the swap contract, then{" "}
+                <span className="text-white/75">BobbieArcSwap.swapUsdcForArc</span>. USDC is debited from your balance; ARC demo
+                tokens are minted on Arc Testnet (USDC gas).
+              </>
+            ) : (
+              <>
+                Your wallet will broadcast <span className="text-white/75">emitGmBurst</span> on ArcGovernance (real Arc Testnet
+                transaction, USDC gas). This is Proof of Presence only — not a token swap.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm">
@@ -237,7 +327,9 @@ export function TransactionConfirmModal({
           </div>
           <div className="mt-3 flex items-center justify-between text-white/60">
             <span>On-chain call</span>
-            <span className="text-right text-xs text-white">emitGmBurst()</span>
+            <span className="text-right text-xs text-white">
+              {txKind === "usdc_arc_swap" ? "swapUsdcForArc()" : "emitGmBurst()"}
+            </span>
           </div>
           <div className="mt-3 flex items-center justify-between text-white/60">
             <span>Network</span>

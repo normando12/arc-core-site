@@ -32,6 +32,9 @@ const USYC_META: ArcPortfolioTokenMeta = {
   decimals: 6,
 }
 
+/** Official Arc Testnet USDC ERC-20 interface (shared balance view with native gas). */
+export const ARC_TESTNET_USDC: ArcPortfolioTokenMeta = USDC_META
+
 function optionalArcFromEnv(): ArcPortfolioTokenMeta | null {
   const raw = process.env.NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS?.trim()
   if (!raw?.startsWith("0x") || raw.length !== 42) return null

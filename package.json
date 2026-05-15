@@ -21,6 +21,7 @@
     "contracts:codegen": "node node_modules/hardhat/internal/cli/cli.js compile --config hardhat.config.cjs && node scripts/sync-constants-abi.js",
     "test:contracts": "node node_modules/hardhat/internal/cli/cli.js test --config hardhat.config.cjs",
     "deploy:arc": "node node_modules/hardhat/internal/cli/cli.js run scripts/deploy.js --network arcTestnet --config hardhat.config.cjs",
+    "deploy:bobbieswap": "node node_modules/hardhat/internal/cli/cli.js run scripts/deploy-bobbie-swap.js --network arcTestnet --config hardhat.config.cjs",
     "wallet:generate": "node scripts/generate-test-wallet.mjs"
   },
   "dependencies": {
