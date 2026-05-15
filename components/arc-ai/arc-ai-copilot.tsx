@@ -56,7 +56,6 @@ import { buildAssistantReply } from "@/lib/bobbie-chat-logic"
 import {
   AI_INSIGHT,
   GAS_TRACKER,
-  MOCK_TOKENS,
   MOCK_TXS,
   PORTFOLIO_SERIES,
   PROMPT_SUGGESTIONS,
@@ -74,6 +73,8 @@ import { shortHex } from "@/lib/arc-log"
 import { playTxSuccessSound } from "@/lib/tx-success-sound"
 import { cn } from "@/lib/utils"
 import { useArcLiveStatus } from "@/hooks/use-arc-live-status"
+import { useArcPortfolioBalances, type ArcPortfolioState } from "@/hooks/use-arc-portfolio-balances"
+import { buildArcPortfolioTokenList } from "@/lib/arc-testnet-portfolio"
 
 type ChatMessage = {
   id: string
@@ -254,18 +255,127 @@ function LeftSidebar({
   )
 }
 
+function walletOverviewPrimary(portfolio: ArcPortfolioState): string {
+  switch (portfolio.kind) {
+    case "loading":
+      return "…"
+    case "ready": {
+      const u = portfolio.rows.find((r) => r.meta.symbol === "USDC")
+      return u ? `${u.formatted} USDC` : "0 USDC"
+    }
+    case "wrong_chain":
+    case "error":
+    default:
+      return "—"
+  }
+}
+
+function walletOverviewSubtext(portfolio: ArcPortfolioState, connected: boolean): string {
+  if (!connected) return "Connect on Arc Testnet to load live ERC-20 balances."
+  if (portfolio.kind === "wrong_chain") return "Switch to Arc Testnet — balances are read on-chain here only."
+  if (portfolio.kind === "loading") return "Reading token contracts (USDC / EURC / USYC)…"
+  if (portfolio.kind === "error") return portfolio.message
+  if (portfolio.kind === "ready") return "Live wallet balance (official Arc Testnet token addresses)."
+  return ""
+}
+
+function sidebarPortfolioChartData(portfolio: ArcPortfolioState) {
+  const usdc =
+    portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === "USDC") : undefined
+  const n = usdc ? Number.parseFloat(usdc.formatted.replace(/,/g, "")) : 0
+  const v = Number.isFinite(n) ? n : 0
+  return PORTFOLIO_SERIES.map((row) => ({ t: row.t, v }))
+}
+
+function PortfolioTokenRows({
+  portfolio,
+  className,
+}: {
+  portfolio: ArcPortfolioState
+  /** Extra grid columns, e.g. `sm:grid-cols-2` for the full portfolio page */
+  className?: string
+}) {
+  const gridClass = cn("grid gap-2", className)
+
+  if (portfolio.kind === "loading") {
+    return (
+      <div className={gridClass}>
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="flex animate-pulse items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
+          >
+            <div className="space-y-2">
+              <div className="h-3.5 w-16 rounded bg-white/10" />
+              <div className="h-3 w-24 rounded bg-white/[0.06]" />
+            </div>
+            <div className="h-4 w-20 rounded bg-white/10" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (portfolio.kind === "ready") {
+    return (
+      <div className={gridClass}>
+        {portfolio.rows.map((row) => (
+          <div
+            key={row.meta.symbol}
+            className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition-colors hover:bg-white/[0.05]"
+          >
+            <div>
+              <div className="text-sm font-medium">{row.meta.symbol}</div>
+              <div className="text-[11px] text-white/45">{row.meta.name}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-medium tabular-nums tracking-tight">{row.formatted}</div>
+              <div className="text-[11px] text-[var(--arc-neon-cyan)]/90">on-chain</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className={gridClass}>
+      {buildArcPortfolioTokenList().map((t) => (
+        <div
+          key={t.symbol}
+          className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
+        >
+          <div>
+            <div className="text-sm font-medium text-white/50">{t.symbol}</div>
+            <div className="text-[11px] text-white/35">{t.name}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-medium tabular-nums text-white/35">—</div>
+            <div className="text-[11px] text-white/30">…</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function RightSidebar({
   connected,
+  walletAddress,
+  portfolio,
   onOpenSwap,
   arcLive,
   arcLiveLoading,
 }: {
   connected: boolean
+  walletAddress?: string
+  portfolio: ArcPortfolioState
   onOpenSwap: () => void
   arcLive: ArcLiveStatus | null
   arcLiveLoading: boolean
 }) {
   const bobbieContract = getBobbieContractAddress()
+  const chartSeries = useMemo(() => sidebarPortfolioChartData(portfolio), [portfolio])
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
@@ -274,10 +384,10 @@ function RightSidebar({
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[11px] font-medium tracking-wide text-white/45">Wallet overview</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">
-                {connected ? "$32,683.44" : "—"}
+              <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">
+                {walletOverviewPrimary(portfolio)}
               </div>
-              <div className="mt-1 text-xs text-white/45">{connected ? "Illustrative portfolio" : "Connect to preview"}</div>
+              <div className="mt-1 text-xs text-white/45">{walletOverviewSubtext(portfolio, connected)}</div>
             </div>
             <Badge className="rounded-lg border border-white/10 bg-white/[0.04] text-[11px] text-white/70">
               ARC Testnet
@@ -285,8 +395,20 @@ function RightSidebar({
           </div>
           <Separator className="my-4 bg-white/10" />
           <div className="flex items-center justify-between text-xs text-white/55">
-            <span>24h change</span>
-            <span className="text-[var(--arc-neon-cyan)]">+2.38%</span>
+            <span>ArcScan</span>
+            {walletAddress ? (
+              <a
+                href={ARC_EXPLORER_ADDRESS(walletAddress)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[var(--arc-neon-cyan)] hover:underline"
+              >
+                {shortHex(walletAddress)}
+                <ExternalLink className="size-3 opacity-80" />
+              </a>
+            ) : (
+              <span className="text-white/35">—</span>
+            )}
           </div>
         </div>
       </div>
@@ -299,30 +421,15 @@ function RightSidebar({
           </Button>
         </div>
         <div className="mt-3">
-          <PortfolioChart data={PORTFOLIO_SERIES} />
+          <PortfolioChart data={chartSeries} seriesLabel="USDC (≈ USD)" />
+          <div className="mt-2 text-[10px] text-white/35">Flat line = current USDC snapshot (no historical feed in-app).</div>
         </div>
       </div>
 
       <div className="arc-ai-glass rounded-2xl p-4">
         <div className="text-sm font-semibold tracking-tight">Tokens</div>
-        <div className="mt-3 grid gap-2">
-          {MOCK_TOKENS.map((t) => (
-            <div
-              key={t.symbol}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition-colors hover:bg-white/[0.05]"
-            >
-              <div>
-                <div className="text-sm font-medium">{t.symbol}</div>
-                <div className="text-[11px] text-white/45">{t.name}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-medium">{t.balance}</div>
-                <div className={cn("text-[11px]", t.up ? "text-[var(--arc-neon-cyan)]" : "text-rose-300/80")}>
-                  {t.change}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="mt-3">
+          <PortfolioTokenRows portfolio={portfolio} />
         </div>
       </div>
 
@@ -452,45 +559,140 @@ function RightSidebar({
   )
 }
 
-function PortfolioView() {
+function PortfolioView({
+  portfolio,
+  walletAddress,
+  onSwitchToArc,
+}: {
+  portfolio: ArcPortfolioState
+  walletAddress?: string
+  onSwitchToArc: () => void | Promise<void>
+}) {
+  const chartSeries = useMemo(() => sidebarPortfolioChartData(portfolio), [portfolio])
+
+  const allocation = useMemo(() => {
+    if (portfolio.kind !== "ready") return [] as { label: string; pct: number; c: string }[]
+    const weights = portfolio.rows
+      .map((r) => ({
+        label: r.meta.symbol,
+        w: Number.parseFloat(r.formatted.replace(/,/g, "")) || 0,
+      }))
+      .filter((x) => x.w > 0)
+    const sum = weights.reduce((a, b) => a + b.w, 0)
+    if (sum <= 0) return []
+    const gradients = [
+      "from-[var(--arc-neon-cyan)] to-[var(--arc-neon-purple)]",
+      "from-white/40 to-white/10",
+      "from-[var(--arc-neon-purple)] to-[var(--arc-neon-magenta)]",
+      "from-emerald-300/80 to-emerald-500/40",
+    ]
+    return weights.map((x, i) => ({
+      label: x.label,
+      pct: Math.max(1, Math.round((x.w / sum) * 100)),
+      c: gradients[i % gradients.length]!,
+    }))
+  }, [portfolio])
+
+  const headline =
+    portfolio.kind === "ready"
+      ? (() => {
+          const u = portfolio.rows.find((r) => r.meta.symbol === "USDC")
+          return u ? `${u.formatted} USDC` : "0 USDC"
+        })()
+      : portfolio.kind === "loading"
+        ? "…"
+        : "—"
+
+  const sub =
+    portfolio.kind === "ready"
+      ? "Live ERC-20 balances on Arc Testnet (Circle USDC interface, EURC, USYC — see Arc docs)."
+      : portfolio.kind === "wrong_chain"
+        ? "Switch to Arc Testnet to load this wallet's on-chain balances."
+        : portfolio.kind === "loading"
+          ? "Loading balances…"
+          : portfolio.kind === "error"
+            ? portfolio.message
+            : "Connect your wallet on Arc Testnet."
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
-        <p className="mt-1 text-sm text-white/55">Illustrative balances for ARC Testnet (not wallet reads).</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
+          <p className="mt-1 max-w-2xl text-sm text-white/55">{sub}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {portfolio.kind === "wrong_chain" ? (
+            <Button
+              type="button"
+              className="rounded-xl bg-white text-black hover:bg-white/90"
+              onClick={() => void onSwitchToArc()}
+            >
+              Switch to Arc Testnet
+            </Button>
+          ) : null}
+          {walletAddress ? (
+            <a
+              href={ARC_EXPLORER_ADDRESS(walletAddress)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 hover:bg-white/[0.07]"
+            >
+              ArcScan · {shortHex(walletAddress)}
+              <ExternalLink className="size-4 opacity-70" />
+            </a>
+          ) : null}
+        </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="arc-ai-glow-border rounded-2xl lg:col-span-2">
           <div className="arc-ai-glass rounded-2xl p-5">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Net worth</div>
-              <Badge className="border-white/10 bg-white/[0.04] text-white/70">7D</Badge>
+              <div className="text-sm font-semibold">USDC balance</div>
+              <Badge className="border-white/10 bg-white/[0.04] text-white/70">Live</Badge>
             </div>
-            <div className="mt-2 text-3xl font-semibold tracking-tight">$32,683.44</div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{headline}</div>
+            <p className="mt-2 text-[11px] text-white/40">
+              Chart shows the current USDC token amount repeated across the week — we do not ingest historical wallet history yet.
+            </p>
             <div className="mt-4 h-56">
-              <PortfolioChart data={PORTFOLIO_SERIES} />
+              <PortfolioChart data={chartSeries} seriesLabel="USDC (≈ USD)" />
             </div>
           </div>
         </div>
         <div className="arc-ai-glass rounded-2xl p-5">
           <div className="text-sm font-semibold">Allocation</div>
+          <p className="mt-1 text-[11px] text-white/40">Share of each tracked token balance (numeric sum, not oracle priced).</p>
           <div className="mt-4 grid gap-3">
-            {[
-              { label: "ARC", pct: 56, c: "from-[var(--arc-neon-cyan)] to-[var(--arc-neon-purple)]" },
-              { label: "Stablecoins", pct: 28, c: "from-white/40 to-white/10" },
-              { label: "BTC / ETH", pct: 16, c: "from-[var(--arc-neon-purple)] to-[var(--arc-neon-magenta)]" },
-            ].map((x) => (
-              <div key={x.label}>
-                <div className="flex items-center justify-between text-xs text-white/55">
-                  <span>{x.label}</span>
-                  <span>{x.pct}%</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div className={cn("h-full rounded-full bg-gradient-to-r", x.c)} style={{ width: `${x.pct}%` }} />
-                </div>
+            {allocation.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-4 text-xs text-white/45">
+                No balances detected for the tracked tokens yet, or data is still loading. Use the{" "}
+                <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer" className="text-[var(--arc-neon-cyan)] hover:underline">
+                  Circle faucet
+                </a>{" "}
+                on Arc Testnet for USDC / EURC.
               </div>
-            ))}
+            ) : (
+              allocation.map((x) => (
+                <div key={x.label}>
+                  <div className="flex items-center justify-between text-xs text-white/55">
+                    <span>{x.label}</span>
+                    <span>{x.pct}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className={cn("h-full rounded-full bg-gradient-to-r", x.c)} style={{ width: `${x.pct}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+        </div>
+      </div>
+
+      <div className="arc-ai-glass rounded-2xl p-5">
+        <div className="text-sm font-semibold tracking-tight">All tracked tokens</div>
+        <div className="mt-3">
+          <PortfolioTokenRows portfolio={portfolio} className="sm:grid-cols-2" />
         </div>
       </div>
     </div>
@@ -797,6 +999,7 @@ export function ArcAICopilot() {
   }, [])
 
   const { data: arcLive, loading: arcLiveLoading } = useArcLiveStatus()
+  const portfolio = useArcPortfolioBalances()
 
   const chatStarted = messages.length > 0
 
@@ -978,6 +1181,8 @@ export function ArcAICopilot() {
                     <ScrollArea className="h-svh">
                       <RightSidebar
                         connected={isConnected}
+                        walletAddress={address}
+                        portfolio={portfolio}
                         onOpenSwap={openSwapManual}
                         arcLive={arcLive}
                         arcLiveLoading={arcLiveLoading}
@@ -992,7 +1197,9 @@ export function ArcAICopilot() {
           <main className="flex min-h-0 flex-1 flex-col">
             {active !== "chat" ? (
               <ScrollArea className="min-h-0 flex-1">
-                {active === "portfolio" ? <PortfolioView /> : null}
+                {active === "portfolio" ? (
+                  <PortfolioView portfolio={portfolio} walletAddress={address} onSwitchToArc={handleSwitchToArc} />
+                ) : null}
                 {active === "transactions" ? <TransactionsView /> : null}
                 {active === "bridge" ? <BridgeView /> : null}
                 {active === "settings" ? (
@@ -1145,6 +1352,8 @@ export function ArcAICopilot() {
             <ScrollArea className="h-full">
               <RightSidebar
                 connected={isConnected}
+                walletAddress={address}
+                portfolio={portfolio}
                 onOpenSwap={openSwapManual}
                 arcLive={arcLive}
                 arcLiveLoading={arcLiveLoading}

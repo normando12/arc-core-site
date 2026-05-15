@@ -15,7 +15,7 @@ export function replyFor(input: string): string {
   if (t.includes("bridge"))
     return "This app does not submit bridge transactions yet. Use an official bridge or faucet for Arc Testnet USDC; I can still reason about routes and gas when you describe the move."
   if (t.includes("portfolio") || t.includes("balance"))
-    return "The right rail shows illustrative portfolio numbers (not live wallet reads). Connect your wallet and use ArcScan for real balances and history."
+    return "Open Portfolio in the sidebar for live ERC-20 balances on Arc Testnet (USDC, EURC, USYC). History still lives on ArcScan."
   if (t.includes("stake"))
     return "Validator delegation is not wired here yet. On Arc Testnet, use explorers and protocol UIs you trust; I can help compare commission and uptime in plain language."
   if (t.includes("trend") || t.includes("token"))
