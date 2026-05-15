@@ -29,3 +29,4 @@ next.user-config.*
 # Hardhat
 cache/
 artifacts/
+.vercel

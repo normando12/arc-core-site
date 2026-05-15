@@ -1,6 +1,6 @@
 import { defineChain } from "viem"
 
-/** Arc Testnet — see https://docs.arc.network/integrate/connect-to-arc */
+/** Arc Testnet — chain id 5042002, USDC gas, EVM. See https://docs.arc.io/arc-chain */
 export const arcTestnet = defineChain({
   id: 5042002,
   name: "Arc Testnet",
@@ -22,3 +22,6 @@ export const arcTestnet = defineChain({
 
 export const ARC_EXPLORER_TX = (hash: string) =>
   `https://testnet.arcscan.app/tx/${hash}`
+
+export const ARC_EXPLORER_ADDRESS = (address: string) =>
+  `https://testnet.arcscan.app/address/${address}`

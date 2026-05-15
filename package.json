@@ -1,13 +1,13 @@
 {
-  "name": "my-project",
+  "name": "bobbie-ai",
   "version": "0.1.0",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 3000",
-    "dev:host": "next dev --hostname 0.0.0.0 --port 3000",
+    "dev": "next dev --hostname 127.0.0.1 --port 3000 --webpack",
+    "dev:host": "next dev --hostname 0.0.0.0 --port 3000 --webpack",
     "build": "next build",
     "start": "next start",
     "start:host": "next start --hostname 0.0.0.0 --port 3000",
@@ -20,7 +20,8 @@
     "compile": "node node_modules/hardhat/internal/cli/cli.js compile --config hardhat.config.cjs",
     "contracts:codegen": "node node_modules/hardhat/internal/cli/cli.js compile --config hardhat.config.cjs && node scripts/sync-constants-abi.js",
     "test:contracts": "node node_modules/hardhat/internal/cli/cli.js test --config hardhat.config.cjs",
-    "deploy:arc": "node node_modules/hardhat/internal/cli/cli.js run scripts/deploy.js --network arcTestnet --config hardhat.config.cjs"
+    "deploy:arc": "node node_modules/hardhat/internal/cli/cli.js run scripts/deploy.js --network arcTestnet --config hardhat.config.cjs",
+    "wallet:generate": "node scripts/generate-test-wallet.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

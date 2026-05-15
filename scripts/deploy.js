@@ -29,6 +29,17 @@ async function main() {
   const hre = require("hardhat");
   const log = (code, msg) => console.log(`[${code}] ${msg}`);
 
+  const pk = process.env.PRIVATE_KEY?.trim();
+  if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+    console.error(
+      "[ARC//_ENV_MISSING] Define PRIVATE_KEY no ficheiro .env na raiz (ver .env.example).",
+    );
+    console.error(
+      "[ARC//_ENV_MISSING] Gera uma chave só na tua máquina: npm run wallet:generate — nunca partilhes a chave.",
+    );
+    process.exit(1);
+  }
+
   log("ARC//_COMPILE", "artifact pipeline engaged");
   const ArcGovernance = await hre.ethers.getContractFactory("ArcGovernance");
   log("ARC//_DEPLOY", "broadcasting ArcGovernance…");

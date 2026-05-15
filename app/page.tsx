@@ -1,5 +1,5 @@
-import { ArcDApp } from "@/components/arc-dapp"
+import { ArcAICopilot } from '@/components/arc-ai/arc-ai-copilot'
 
 export default function Home() {
-  return <ArcDApp />
+  return <ArcAICopilot />
 }
