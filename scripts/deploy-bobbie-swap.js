@@ -39,7 +39,22 @@ async function main() {
   await tx.wait()
   console.log("[ARC//_LINKED] MockArcToken.swap = BobbieArcSwap")
 
-  console.log("\n--- Add to .env / Vercel ---")
+  const fs = require("fs")
+  const path = require("path")
+  const constantsDir = path.join(__dirname, "..", "src", "constants")
+  fs.writeFileSync(
+    path.join(constantsDir, "bobbieSwapAddress.generated.ts"),
+    `// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\nexport const bobbieSwapAddress = "${swapAddr}" as \\`0x\\${string}\\`;\n`,
+    "utf8",
+  )
+  fs.writeFileSync(
+    path.join(constantsDir, "bobbieArcTokenAddress.generated.ts"),
+    `// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\nexport const bobbieArcTokenAddress = "${tokenAddr}" as \\`0x\\${string}\\`;\n`,
+    "utf8",
+  )
+  console.log("[ARC//_CODEGEN] src/constants/bobbieSwapAddress.generated.ts + bobbieArcTokenAddress.generated.ts")
+
+  console.log("\n--- Optional: override in .env / Vercel ---")
   console.log(`NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS=${swapAddr}`)
   console.log(`NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=${tokenAddr}`)
   console.log("NEXT_PUBLIC_ARC_ERC20_DECIMALS=18")

@@ -1,5 +1,7 @@
 import type { Address } from "viem"
 
+import { bobbieSwapAddress as bobbieSwapAddressGenerated } from "@/src/constants/bobbieSwapAddress.generated"
+
 /** Same constants as `BobbieArcSwap` constructor / Arc AI preview rate (USDC → ARC). */
 export const BOBBIE_SWAP_RATE_NUM = 684n
 export const BOBBIE_SWAP_RATE_DEN = 1000n
@@ -14,8 +16,16 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Address
 
 export function getBobbieSwapAddress(): Address | null {
   const raw = process.env.NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS?.trim()
-  if (!raw?.startsWith("0x") || raw.length !== 42 || raw.toLowerCase() === ZERO.toLowerCase()) return null
-  return raw as Address
+  if (raw?.startsWith("0x") && raw.length === 42 && raw.toLowerCase() !== ZERO.toLowerCase()) {
+    return raw as Address
+  }
+  if (
+    bobbieSwapAddressGenerated &&
+    bobbieSwapAddressGenerated.toLowerCase() !== ZERO.toLowerCase()
+  ) {
+    return bobbieSwapAddressGenerated as Address
+  }
+  return null
 }
 
 export function isBobbieSwapConfigured(): boolean {
