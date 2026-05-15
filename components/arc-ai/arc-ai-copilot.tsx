@@ -1374,6 +1374,17 @@ export function ArcAICopilot() {
               </div>
 
               <div className="ml-auto flex items-center gap-2">
+                <Button variant="outline" size="sm" asChild className="rounded-xl border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]">
+                  <a
+                    href="https://faucet.circle.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="size-3.5 opacity-80" aria-hidden />
+                    Faucet
+                  </a>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
