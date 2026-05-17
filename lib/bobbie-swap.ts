@@ -1,10 +1,11 @@
-import type { Address } from "viem"
+import type { Address, PublicClient } from "viem"
+
+import type { SwapSymbol } from "@/lib/arc-ai-parse-swap"
 
 import { bobbieArcTokenAddress as bobbieArcTokenAddressGenerated } from "@/src/constants/bobbieArcTokenAddress.generated"
 import { bobbieEthTokenAddress as bobbieEthTokenAddressGenerated } from "@/src/constants/bobbieEthTokenAddress.generated"
 import { bobbieSwapAddress as bobbieSwapAddressGenerated } from "@/src/constants/bobbieSwapAddress.generated"
 import { bobbieWbtcTokenAddress as bobbieWbtcTokenAddressGenerated } from "@/src/constants/bobbieWbtcTokenAddress.generated"
-import type { SwapSymbol } from "@/lib/arc-ai-parse-swap"
 import type { ArcPortfolioTokenMeta } from "@/lib/arc-testnet-portfolio"
 import { ARC_TESTNET_EURC, ARC_TESTNET_USDC } from "@/lib/arc-testnet-portfolio"
 
@@ -235,6 +236,143 @@ export const bobbieSwapAbi = [
     outputs: [{ name: "", type: "address" }],
   },
 ] as const
+
+export type BobbieSwapVariant = "multi" | "legacy" | "unknown"
+
+/** `BobbieArcSwap` (USDC↔ARC only) vs `BobbieMultiSwap` (all pairs). */
+export async function detectBobbieSwapVariant(
+  client: PublicClient,
+  swapAddr: Address,
+): Promise<BobbieSwapVariant> {
+  try {
+    await client.readContract({
+      address: swapAddr,
+      abi: bobbieSwapAbi,
+      functionName: "eurc",
+    })
+    return "multi"
+  } catch {
+    /* not MultiSwap */
+  }
+  try {
+    await client.readContract({
+      address: swapAddr,
+      abi: bobbieSwapAbi,
+      functionName: "quoteUsdcOut",
+      args: [1n],
+    })
+    return "legacy"
+  } catch {
+    return "unknown"
+  }
+}
+
+export type BobbieSwapWriteCall =
+  | {
+      variant: "multi"
+      functionName: "swap"
+      args: readonly [number, number, bigint, bigint]
+      expectedOut: bigint
+    }
+  | {
+      variant: "legacy"
+      functionName: "swapUsdcForArc"
+      args: readonly [bigint, bigint]
+      expectedOut: bigint
+    }
+  | {
+      variant: "legacy"
+      functionName: "swapArcForUsdc"
+      args: readonly [bigint, bigint]
+      expectedOut: bigint
+    }
+
+function applySlippage(expectedOut: bigint, slippageBps = 100): bigint {
+  if (expectedOut === 0n) return 0n
+  return (expectedOut * BigInt(10_000 - slippageBps)) / 10_000n
+}
+
+/** On-chain quote + correct function for the deployed swap contract. */
+export async function buildBobbieSwapWriteCall(
+  client: PublicClient,
+  swapAddr: Address,
+  fromSymbol: SwapSymbol,
+  toSymbol: SwapSymbol,
+  amountIn: bigint,
+  slippageBps = 100,
+): Promise<BobbieSwapWriteCall> {
+  const variant = await detectBobbieSwapVariant(client, swapAddr)
+  if (variant === "unknown") {
+    throw new Error("ARC//_SWAP_ADDR · swap contract at configured address is not recognized")
+  }
+
+  if (variant === "legacy") {
+    if (fromSymbol === "USDC" && toSymbol === "ARC") {
+      const expectedOut = await client.readContract({
+        address: swapAddr,
+        abi: bobbieSwapAbi,
+        functionName: "quoteArcOut",
+        args: [amountIn],
+      })
+      const minOut = applySlippage(expectedOut, slippageBps)
+      if (minOut === 0n) throw new Error("ARC//_DUST · amount rounds to zero on-chain")
+      return {
+        variant: "legacy",
+        functionName: "swapUsdcForArc",
+        args: [amountIn, minOut] as const,
+        expectedOut,
+      }
+    }
+    if (fromSymbol === "ARC" && toSymbol === "USDC") {
+      const expectedOut = await client.readContract({
+        address: swapAddr,
+        abi: bobbieSwapAbi,
+        functionName: "quoteUsdcOut",
+        args: [amountIn],
+      })
+      const minOut = applySlippage(expectedOut, slippageBps)
+      if (minOut === 0n) throw new Error("ARC//_DUST · amount rounds to zero on-chain")
+      return {
+        variant: "legacy",
+        functionName: "swapArcForUsdc",
+        args: [amountIn, minOut] as const,
+        expectedOut,
+      }
+    }
+    throw new Error(
+      "ARC//_LEGACY_PAIR · this deployment only supports USDC ↔ ARC; run npm run deploy:bobbieswap for multi-asset swaps",
+    )
+  }
+
+  const fromId = SWAP_TOKEN_ID[fromSymbol]
+  const toId = SWAP_TOKEN_ID[toSymbol]
+  const expectedOut = await client.readContract({
+    address: swapAddr,
+    abi: bobbieSwapAbi,
+    functionName: "quoteOut",
+    args: [fromId, toId, amountIn],
+  })
+  const minOut = applySlippage(expectedOut, slippageBps)
+  if (minOut === 0n) throw new Error("ARC//_DUST · amount rounds to zero on-chain")
+  return {
+    variant: "multi",
+    functionName: "swap",
+    args: [fromId, toId, amountIn, minOut] as const,
+    expectedOut,
+  }
+}
+
+export function bobbieSwapOnChainLabel(call: BobbieSwapWriteCall): string {
+  if (call.functionName === "swapUsdcForArc") return "swapUsdcForArc()"
+  if (call.functionName === "swapArcForUsdc") return "swapArcForUsdc()"
+  const [, toId] = call.args
+  const to =
+    (Object.entries(SWAP_TOKEN_ID).find(([, id]) => id === toId)?.[0] as SwapSymbol | undefined) ?? "?"
+  const fromId = call.args[0]
+  const from =
+    (Object.entries(SWAP_TOKEN_ID).find(([, id]) => id === fromId)?.[0] as SwapSymbol | undefined) ?? "?"
+  return `swap(${from}→${to})`
+}
 
 /** Resolve demo token addresses from BobbieMultiSwap on-chain (overrides zero codegen stubs). */
 export function mergePortfolioTokenAddresses(

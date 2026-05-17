@@ -335,7 +335,14 @@ export function TransactionConfirmModal({
                     <span className="text-white/75">{swapFrom}.approve</span> then{" "}
                   </>
                 ) : null}
-                <span className="text-white/75">BobbieMultiSwap.swap</span> ({swapFrom} → {swapTo}). Demo tokens are minted or burned;
+                <span className="text-white/75">
+                  {swapFrom === "USDC" && swapTo === "ARC"
+                    ? "swapUsdcForArc"
+                    : swapFrom === "ARC" && swapTo === "USDC"
+                      ? "swapArcForUsdc"
+                      : "swap"}
+                </span>{" "}
+                ({swapFrom} → {swapTo}). Demo tokens are minted or burned;
                 stablecoins move from your wallet or the swap pool. Gas in native USDC.
               </>
             ) : (
@@ -363,7 +370,11 @@ export function TransactionConfirmModal({
             <span>On-chain call</span>
             <span className="text-right text-xs text-white">
               {txKind === "swap" && swapFrom != null && swapTo != null
-                ? `swap(${swapFrom}→${swapTo})`
+                ? swapFrom === "USDC" && swapTo === "ARC"
+                  ? "swapUsdcForArc()"
+                  : swapFrom === "ARC" && swapTo === "USDC"
+                    ? "swapArcForUsdc()"
+                    : `swap(${swapFrom}→${swapTo})`
                 : "emitGmBurst()"}
             </span>
           </div>

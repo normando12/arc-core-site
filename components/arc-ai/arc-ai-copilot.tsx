@@ -85,9 +85,8 @@ import {
   getSwapTokenAddress,
   isBobbieSwapConfigured,
   isSwapPairReady,
-  quoteSwapOut,
   SWAP_DECIMALS,
-  SWAP_TOKEN_ID,
+  buildBobbieSwapWriteCall,
 } from "@/lib/bobbie-swap"
 import { buildArcPortfolioTokenList } from "@/lib/arc-testnet-portfolio"
 
@@ -1065,15 +1064,14 @@ export function ArcAICopilot() {
         return false
       }
 
-      const expectedOut = quoteSwapOut(fromSymbol, toSymbol, amountIn)
-      const minOut = (expectedOut * 99n) / 100n
-      if (minOut === 0n) {
-        toast.error("Amount rounds to zero on-chain — try a slightly larger value.")
+      let swapCall: Awaited<ReturnType<typeof buildBobbieSwapWriteCall>>
+      try {
+        swapCall = await buildBobbieSwapWriteCall(publicClient, swapAddr, fromSymbol, toSymbol, amountIn)
+      } catch (e) {
+        toast.error(formatArcTxError(e))
         return false
       }
 
-      const fromId = SWAP_TOKEN_ID[fromSymbol]
-      const toId = SWAP_TOKEN_ID[toSymbol]
       const needsApprove = fromSymbol === "USDC" || fromSymbol === "EUR"
       const tokenAddr = getSwapTokenAddress(fromSymbol)
 
@@ -1098,11 +1096,19 @@ export function ArcAICopilot() {
           }
         }
 
+        await publicClient.simulateContract({
+          address: swapAddr,
+          abi: bobbieSwapAbi,
+          functionName: swapCall.functionName,
+          args: [...swapCall.args],
+          account: signingAddress,
+        })
+
         const hash = await writeContractAsync({
           address: swapAddr,
           abi: bobbieSwapAbi,
-          functionName: "swap",
-          args: [fromId, toId, amountIn, minOut],
+          functionName: swapCall.functionName,
+          args: [...swapCall.args],
           chainId: arcTestnet.id,
           account: signingAddress,
         })
