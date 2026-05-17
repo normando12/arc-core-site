@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
+import { useCallback, useMemo } from "react"
 import { erc20Abi, formatUnits } from "viem"
 import { useAccount, useChainId, useReadContracts } from "wagmi"
 import { arcTestnet } from "@/lib/chains/arc-testnet"
@@ -25,18 +26,22 @@ export type ArcPortfolioRow = {
 }
 
 export type ArcPortfolioState =
-  | { kind: "disconnected"; rows: ArcPortfolioRow[]; refetch: () => void }
-  | { kind: "wrong_chain"; chainId: number; rows: ArcPortfolioRow[]; refetch: () => void }
-  | { kind: "loading"; rows: ArcPortfolioRow[]; refetch: () => void }
-  | { kind: "error"; rows: ArcPortfolioRow[]; message: string; refetch: () => void }
-  | { kind: "ready"; rows: ArcPortfolioRow[]; refetch: () => void }
+  | { kind: "disconnected"; rows: ArcPortfolioRow[]; refetch: () => Promise<void> }
+  | { kind: "wrong_chain"; chainId: number; rows: ArcPortfolioRow[]; refetch: () => Promise<void> }
+  | { kind: "loading"; rows: ArcPortfolioRow[]; refetch: () => Promise<void> }
+  | { kind: "error"; rows: ArcPortfolioRow[]; message: string; refetch: () => Promise<void> }
+  | { kind: "ready"; rows: ArcPortfolioRow[]; refetch: () => Promise<void> }
 
 function trimDecimalString(s: string): string {
   if (!s.includes(".")) return s
   return s.replace(/(\.\d*?[1-9])0+$/u, "$1").replace(/\.0+$/u, "")
 }
 
+/** Poll delays after a swap so RPC/indexers return fresh USDC + ARC balances. */
+const REFRESH_DELAYS_MS = [0, 1200, 2800, 4500] as const
+
 export function useArcPortfolioBalances(): ArcPortfolioState {
+  const queryClient = useQueryClient()
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const ZERO = "0x0000000000000000000000000000000000000000" as Address
@@ -56,7 +61,7 @@ export function useArcPortfolioBalances(): ArcPortfolioState {
 
   const { data: demoAddrData } = useReadContracts({
     contracts: demoAddrContracts,
-    query: { enabled: demoAddrContracts.length > 0 },
+    query: { enabled: demoAddrContracts.length > 0, staleTime: 0 },
   })
 
   const tokens = useMemo(() => {
@@ -89,14 +94,23 @@ export function useArcPortfolioBalances(): ArcPortfolioState {
     contracts,
     query: {
       enabled: onArc && contracts.length > 0,
+      staleTime: 0,
+      gcTime: 30_000,
+      placeholderData: keepPreviousData,
     },
   })
 
-  return useMemo((): ArcPortfolioState => {
-    const rf = () => {
-      void refetch()
+  const refreshBalances = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["readContracts"] })
+    for (const delay of REFRESH_DELAYS_MS) {
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+      await refetch()
     }
+  }, [queryClient, refetch])
 
+  return useMemo((): ArcPortfolioState => {
     const rowsFromBalances = (readResults: typeof data): ArcPortfolioRow[] => {
       let readIdx = 0
       return tokens.map((meta) => {
@@ -111,23 +125,33 @@ export function useArcPortfolioBalances(): ArcPortfolioState {
     }
 
     if (!isConnected || !address) {
-      return { kind: "disconnected", rows: rowsFromBalances(undefined), refetch: rf }
+      return { kind: "disconnected", rows: rowsFromBalances(undefined), refetch: refreshBalances }
     }
     if (chainId !== arcTestnet.id) {
-      return { kind: "wrong_chain", chainId, rows: rowsFromBalances(undefined), refetch: rf }
+      return { kind: "wrong_chain", chainId, rows: rowsFromBalances(undefined), refetch: refreshBalances }
     }
-    if (isPending) {
-      return { kind: "loading", rows: [], refetch: rf }
+    if (isPending && data === undefined) {
+      return { kind: "loading", rows: [], refetch: refreshBalances }
     }
     if (isError || data == null) {
       return {
         kind: "error",
-        rows: [],
-        refetch: rf,
+        rows: rowsFromBalances(data),
+        refetch: refreshBalances,
         message: error instanceof Error ? error.message : "Could not read token balances",
       }
     }
 
-    return { kind: "ready", rows: rowsFromBalances(data), refetch: rf }
-  }, [address, chainId, data, error, isConnected, isError, isPending, refetch, tokens])
+    return { kind: "ready", rows: rowsFromBalances(data), refetch: refreshBalances }
+  }, [
+    address,
+    chainId,
+    data,
+    error,
+    isConnected,
+    isError,
+    isPending,
+    refreshBalances,
+    tokens,
+  ])
 }

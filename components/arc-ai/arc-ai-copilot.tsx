@@ -1115,8 +1115,11 @@ export function ArcAICopilot() {
           ),
         })
         void playTxSuccessSound()
-        portfolio.refetch()
-        window.setTimeout(() => portfolio.refetch(), 2500)
+        try {
+          await portfolio.refetch()
+        } catch {
+          /* balance refresh is best-effort; swap already succeeded */
+        }
         return true
       } catch (e) {
         toast.error(formatArcTxError(e))
@@ -1604,7 +1607,10 @@ export function ArcAICopilot() {
         balances={swapBalanceMap}
         onOpenChange={(v) => {
           setSwapOpen(v)
-          if (!v) setSwapDraft(null)
+          if (!v) {
+            setSwapDraft(null)
+            void portfolio.refetch()
+          }
         }}
         onConfirm={(p) => {
           setPendingTx({ kind: "swap", payload: p })
