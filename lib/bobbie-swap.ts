@@ -5,6 +5,7 @@ import { bobbieEthTokenAddress as bobbieEthTokenAddressGenerated } from "@/src/c
 import { bobbieSwapAddress as bobbieSwapAddressGenerated } from "@/src/constants/bobbieSwapAddress.generated"
 import { bobbieWbtcTokenAddress as bobbieWbtcTokenAddressGenerated } from "@/src/constants/bobbieWbtcTokenAddress.generated"
 import type { SwapSymbol } from "@/lib/arc-ai-parse-swap"
+import type { ArcPortfolioTokenMeta } from "@/lib/arc-testnet-portfolio"
 import { ARC_TESTNET_EURC, ARC_TESTNET_USDC } from "@/lib/arc-testnet-portfolio"
 
 /** Same constants as legacy `BobbieArcSwap` (USDC → ARC). */
@@ -128,9 +129,9 @@ export function getBobbieWbtcTokenAddress(): Address | null {
 export function getSwapTokenAddress(symbol: SwapSymbol): Address | null {
   switch (symbol) {
     case "USDC":
-      return ARC_TESTNET_USDC.address
+      return ARC_TESTNET_USDC.address!
     case "EUR":
-      return ARC_TESTNET_EURC.address
+      return ARC_TESTNET_EURC.address!
     case "ARC":
       return getBobbieArcTokenAddress()
     case "ETH":
@@ -150,8 +151,7 @@ export function isSwapMintableConfigured(symbol: SwapSymbol): boolean {
 
 export function isSwapPairReady(from: SwapSymbol, to: SwapSymbol): boolean {
   if (!isExecutableSwapPair(from, to)) return false
-  if (!isBobbieSwapConfigured()) return false
-  return isSwapMintableConfigured(from) && isSwapMintableConfigured(to)
+  return isBobbieSwapConfigured()
 }
 
 /** Minimal ABI for BobbieMultiSwap (+ legacy USDC↔ARC). */
@@ -213,4 +213,37 @@ export const bobbieSwapAbi = [
     inputs: [{ name: "arcAmount", type: "uint256" }],
     outputs: [{ name: "", type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "arcToken",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "ethToken",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "wbtcToken",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
 ] as const
+
+/** Resolve demo token addresses from BobbieMultiSwap on-chain (overrides zero codegen stubs). */
+export function mergePortfolioTokenAddresses(
+  tokens: ArcPortfolioTokenMeta[],
+  onChain: Partial<Record<"ARC" | "ETH" | "WBTC", Address>>,
+): ArcPortfolioTokenMeta[] {
+  return tokens.map((t) => {
+    const resolved = onChain[t.symbol as keyof typeof onChain]
+    if (resolved) return { ...t, address: resolved }
+    return t
+  })
+}

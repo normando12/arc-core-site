@@ -284,7 +284,7 @@ function walletOverviewPrimary(portfolio: ArcPortfolioState): string {
 function walletOverviewSubtext(portfolio: ArcPortfolioState, connected: boolean): string {
   if (!connected) return "Connect on Arc Testnet to load live ERC-20 balances."
   if (portfolio.kind === "wrong_chain") return "Switch to Arc Testnet — balances are read on-chain here only."
-  if (portfolio.kind === "loading") return "Reading token contracts (USDC / EURC / USYC)…"
+  if (portfolio.kind === "loading") return "Reading token contracts (USDC, EUR, ETH, WBTC, ARC…)…"
   if (portfolio.kind === "error") return portfolio.message
   if (portfolio.kind === "ready") return "Live wallet balance (official Arc Testnet token addresses)."
   return ""
@@ -311,9 +311,9 @@ function PortfolioTokenRows({
   if (portfolio.kind === "loading") {
     return (
       <div className={gridClass}>
-        {[1, 2, 3].map((i) => (
+        {buildArcPortfolioTokenList().map((t) => (
           <div
-            key={i}
+            key={t.symbol}
             className="flex animate-pulse items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
           >
             <div className="space-y-2">
@@ -341,7 +341,14 @@ function PortfolioTokenRows({
             </div>
             <div className="text-right">
               <div className="text-sm font-medium tabular-nums tracking-tight">{row.formatted}</div>
-              <div className="text-[11px] text-[var(--arc-neon-cyan)]/90">on-chain</div>
+              <div
+                className={cn(
+                  "text-[11px]",
+                  row.onChain ? "text-[var(--arc-neon-cyan)]/90" : "text-white/35",
+                )}
+              >
+                {row.onChain ? "on-chain" : "pending deploy"}
+              </div>
             </div>
           </div>
         ))}
@@ -860,7 +867,7 @@ function buildSwapBalanceMap(
   if (portfolio.kind !== "ready") return {}
   const out: Partial<Record<SwapSymbol, { balance: bigint; decimals: number }>> = {}
   for (const row of portfolio.rows) {
-    const sym = row.meta.symbol === "EURC" ? "EUR" : row.meta.symbol
+    const sym = row.meta.symbol
     if ((SWAP_SYMBOLS as readonly string[]).includes(sym)) {
       out[sym as SwapSymbol] = { balance: row.balance, decimals: row.meta.decimals }
     }
@@ -1040,9 +1047,8 @@ export function ArcAICopilot() {
         return false
       }
 
-      const portfolioSym = fromSymbol === "EUR" ? "EURC" : fromSymbol
       const fromRow =
-        portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === portfolioSym) : undefined
+        portfolio.kind === "ready" ? portfolio.rows.find((r) => r.meta.symbol === fromSymbol) : undefined
       if (!fromRow || amountIn > fromRow.balance) {
         toast.error(`Insufficient ${fromSymbol} balance`)
         return false
@@ -1099,6 +1105,7 @@ export function ArcAICopilot() {
         })
         void playTxSuccessSound()
         portfolio.refetch()
+        window.setTimeout(() => portfolio.refetch(), 2500)
         return true
       } catch (e) {
         toast.error(formatArcTxError(e))

@@ -11,7 +11,8 @@ import { bobbieWbtcTokenAddress as bobbieWbtcTokenAddressGenerated } from "@/src
 export type ArcPortfolioTokenMeta = {
   symbol: string
   name: string
-  address: Address
+  /** null = swap demo token not deployed yet (UI shows 0, no RPC read) */
+  address: Address | null
   decimals: number
 }
 
@@ -22,9 +23,9 @@ const USDC_META: ArcPortfolioTokenMeta = {
   decimals: 6,
 }
 
-const EURC_META: ArcPortfolioTokenMeta = {
-  symbol: "EURC",
-  name: "Euro Coin",
+const EUR_META: ArcPortfolioTokenMeta = {
+  symbol: "EUR",
+  name: "Euro Coin (EURC)",
   address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
   decimals: 6,
 }
@@ -39,79 +40,58 @@ const USYC_META: ArcPortfolioTokenMeta = {
 /** Official Arc Testnet USDC ERC-20 interface (shared balance view with native gas). */
 export const ARC_TESTNET_USDC: ArcPortfolioTokenMeta = USDC_META
 
-/** Official Arc Testnet EURC (shown as EUR in swap UI). */
-export const ARC_TESTNET_EURC: ArcPortfolioTokenMeta = EURC_META
+/** EURC on Arc Testnet (swap + portfolio label EUR). */
+export const ARC_TESTNET_EURC: ArcPortfolioTokenMeta = EUR_META
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address
 
-function optionalArcTokenMeta(): ArcPortfolioTokenMeta | null {
-  const raw = process.env.NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS?.trim()
-  if (
-    raw?.startsWith("0x") &&
-    raw.length === 42 &&
-    raw.toLowerCase() !== ZERO_ADDR.toLowerCase()
-  ) {
-    const decStr = process.env.NEXT_PUBLIC_ARC_ERC20_DECIMALS?.trim()
-    const decimals = decStr ? Number.parseInt(decStr, 10) : 18
-    const d = Number.isFinite(decimals) && decimals >= 0 && decimals <= 36 ? decimals : 18
-    return { symbol: "ARC", name: "ARC (ERC-20)", address: raw as Address, decimals: d }
+function resolveTokenAddress(envKey: string, generated: string | undefined): Address | null {
+  const raw = process.env[envKey]?.trim()
+  if (raw?.startsWith("0x") && raw.length === 42 && raw.toLowerCase() !== ZERO_ADDR.toLowerCase()) {
+    return raw as Address
   }
-  if (
-    bobbieArcTokenAddressGenerated &&
-    bobbieArcTokenAddressGenerated.toLowerCase() !== ZERO_ADDR.toLowerCase()
-  ) {
-    return {
-      symbol: "ARC",
-      name: "ARC (ERC-20)",
-      address: bobbieArcTokenAddressGenerated as Address,
-      decimals: 18,
-    }
+  if (generated && generated.toLowerCase() !== ZERO_ADDR.toLowerCase()) {
+    return generated as Address
   }
   return null
 }
 
-/** ARC demo ERC-20 linked to BobbieArcSwap (env or bundled codegen). Used for ARC→USDC + portfolio. */
+function arcTokenMeta(): ArcPortfolioTokenMeta {
+  const address = resolveTokenAddress("NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS", bobbieArcTokenAddressGenerated)
+  const decStr = process.env.NEXT_PUBLIC_ARC_ERC20_DECIMALS?.trim()
+  const decimals = decStr ? Number.parseInt(decStr, 10) : 18
+  const d = Number.isFinite(decimals) && decimals >= 0 && decimals <= 36 ? decimals : 18
+  return { symbol: "ARC", name: "ARC (ERC-20)", address, decimals: d }
+}
+
+function ethTokenMeta(): ArcPortfolioTokenMeta {
+  return {
+    symbol: "ETH",
+    name: "ETH Demo",
+    address: resolveTokenAddress("NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS", bobbieEthTokenAddressGenerated),
+    decimals: 18,
+  }
+}
+
+function wbtcTokenMeta(): ArcPortfolioTokenMeta {
+  return {
+    symbol: "WBTC",
+    name: "WBTC Demo",
+    address: resolveTokenAddress("NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS", bobbieWbtcTokenAddressGenerated),
+    decimals: 8,
+  }
+}
+
+/** ARC demo ERC-20 linked to BobbieMultiSwap. */
 export function getBobbieArcTokenAddress(): Address | null {
-  const arc = optionalArcTokenMeta()
-  return arc?.address ?? null
+  return arcTokenMeta().address
 }
 
-function optionalDemoTokenMeta(
-  envKey: string,
-  generated: string | undefined,
-  symbol: string,
-  name: string,
-  decimals: number,
-): ArcPortfolioTokenMeta | null {
-  const raw = process.env[envKey]?.trim()
-  const addr =
-    raw?.startsWith("0x") && raw.length === 42 && raw.toLowerCase() !== ZERO_ADDR.toLowerCase()
-      ? (raw as Address)
-      : generated && generated.toLowerCase() !== ZERO_ADDR.toLowerCase()
-        ? (generated as Address)
-        : null
-  if (!addr) return null
-  return { symbol, name, address: addr, decimals }
-}
-
-/** Ordered list of Arc Testnet ERC-20 balances to show in portfolio UI. */
+/** Swap + sidebar token order (always shown; demo tokens without address read as 0). */
 export function buildArcPortfolioTokenList(): ArcPortfolioTokenMeta[] {
-  const arc = optionalArcTokenMeta()
-  const eth = optionalDemoTokenMeta(
-    "NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS",
-    bobbieEthTokenAddressGenerated,
-    "ETH",
-    "ETH Demo",
-    18,
-  )
-  const wbtc = optionalDemoTokenMeta(
-    "NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS",
-    bobbieWbtcTokenAddressGenerated,
-    "WBTC",
-    "WBTC Demo",
-    8,
-  )
-  const base: ArcPortfolioTokenMeta[] = [USDC_META, EURC_META, USYC_META]
-  const demo = [arc, eth, wbtc].filter((x): x is ArcPortfolioTokenMeta => x != null)
-  return [...base, ...demo]
+  return [USDC_META, EUR_META, ethTokenMeta(), wbtcTokenMeta(), arcTokenMeta(), USYC_META]
+}
+
+export function isPortfolioTokenOnChain(meta: ArcPortfolioTokenMeta): boolean {
+  return meta.address != null
 }
