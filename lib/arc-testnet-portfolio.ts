@@ -87,9 +87,14 @@ export function getBobbieArcTokenAddress(): Address | null {
   return arcTokenMeta().address
 }
 
-/** Swap + sidebar token order (always shown; demo tokens without address read as 0). */
+/** Sidebar / portfolio UI — USDC + ARC only. */
 export function buildArcPortfolioTokenList(): ArcPortfolioTokenMeta[] {
-  return [USDC_META, EUR_META, ethTokenMeta(), wbtcTokenMeta(), arcTokenMeta(), USYC_META]
+  return [USDC_META, arcTokenMeta()]
+}
+
+/** All swap assets (balance reads for the swap modal). */
+export function buildSwapPortfolioTokenList(): ArcPortfolioTokenMeta[] {
+  return [USDC_META, EUR_META, ethTokenMeta(), wbtcTokenMeta(), arcTokenMeta()]
 }
 
 export function isPortfolioTokenOnChain(meta: ArcPortfolioTokenMeta): boolean {

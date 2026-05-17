@@ -5,7 +5,7 @@ import { erc20Abi, formatUnits } from "viem"
 import { useAccount, useChainId, useReadContracts } from "wagmi"
 import { arcTestnet } from "@/lib/chains/arc-testnet"
 import {
-  buildArcPortfolioTokenList,
+  buildSwapPortfolioTokenList,
   isPortfolioTokenOnChain,
   type ArcPortfolioTokenMeta,
 } from "@/lib/arc-testnet-portfolio"
@@ -40,7 +40,7 @@ export function useArcPortfolioBalances(): ArcPortfolioState {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const ZERO = "0x0000000000000000000000000000000000000000" as Address
-  const baseTokens = useMemo(() => buildArcPortfolioTokenList(), [])
+  const baseTokens = useMemo(() => buildSwapPortfolioTokenList(), [])
   const swapAddr = getBobbieSwapAddress()
   const onArc = Boolean(isConnected && address && chainId === arcTestnet.id)
 

@@ -74,7 +74,11 @@ import { shortHex } from "@/lib/arc-log"
 import { playTxSuccessSound } from "@/lib/tx-success-sound"
 import { cn } from "@/lib/utils"
 import { useArcLiveStatus } from "@/hooks/use-arc-live-status"
-import { useArcPortfolioBalances, type ArcPortfolioState } from "@/hooks/use-arc-portfolio-balances"
+import {
+  useArcPortfolioBalances,
+  type ArcPortfolioRow,
+  type ArcPortfolioState,
+} from "@/hooks/use-arc-portfolio-balances"
 import {
   bobbieSwapAbi,
   getBobbieSwapAddress,
@@ -284,7 +288,7 @@ function walletOverviewPrimary(portfolio: ArcPortfolioState): string {
 function walletOverviewSubtext(portfolio: ArcPortfolioState, connected: boolean): string {
   if (!connected) return "Connect on Arc Testnet to load live ERC-20 balances."
   if (portfolio.kind === "wrong_chain") return "Switch to Arc Testnet — balances are read on-chain here only."
-  if (portfolio.kind === "loading") return "Reading token contracts (USDC, EUR, ETH, WBTC, ARC…)…"
+  if (portfolio.kind === "loading") return "Reading USDC and ARC balances…"
   if (portfolio.kind === "error") return portfolio.message
   if (portfolio.kind === "ready") return "Live wallet balance (official Arc Testnet token addresses)."
   return ""
@@ -298,6 +302,12 @@ function sidebarPortfolioChartData(portfolio: ArcPortfolioState) {
   return PORTFOLIO_SERIES.map((row) => ({ t: row.t, v }))
 }
 
+const SIDEBAR_TOKEN_SYMBOLS = new Set(["USDC", "ARC"])
+
+function filterSidebarRows(rows: ArcPortfolioRow[]): ArcPortfolioRow[] {
+  return rows.filter((r) => SIDEBAR_TOKEN_SYMBOLS.has(r.meta.symbol))
+}
+
 function PortfolioTokenRows({
   portfolio,
   className,
@@ -307,11 +317,12 @@ function PortfolioTokenRows({
   className?: string
 }) {
   const gridClass = cn("grid gap-2", className)
+  const sidebarTokens = useMemo(() => buildArcPortfolioTokenList(), [])
 
   if (portfolio.kind === "loading") {
     return (
       <div className={gridClass}>
-        {buildArcPortfolioTokenList().map((t) => (
+        {sidebarTokens.map((t) => (
           <div
             key={t.symbol}
             className="flex animate-pulse items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
@@ -330,7 +341,7 @@ function PortfolioTokenRows({
   if (portfolio.kind === "ready") {
     return (
       <div className={gridClass}>
-        {portfolio.rows.map((row) => (
+        {filterSidebarRows(portfolio.rows).map((row) => (
           <div
             key={row.meta.symbol}
             className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition-colors hover:bg-white/[0.05]"
@@ -358,7 +369,7 @@ function PortfolioTokenRows({
 
   return (
     <div className={gridClass}>
-      {buildArcPortfolioTokenList().map((t) => (
+      {sidebarTokens.map((t) => (
         <div
           key={t.symbol}
           className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
