@@ -1,16 +1,17 @@
 /**
- * Deploy MockArcToken + BobbieArcSwap on Arc Testnet.
+ * Deploy MockSwapToken (ARC, ETH, WBTC) + BobbieMultiSwap on Arc Testnet.
  * Requires PRIVATE_KEY and (optionally) ARC_TESTNET_RPC_URL in .env
  *
- * Contract pair supports USDC→ARC (mint) and ARC→USDC (burn + return pool USDC). Redeploy after any Solidity change —
- * codegen updates bundled addresses below.
+ * Fund the swap contract with USDC/EURC for reverse paths (burn demo token → receive stablecoin).
  *
  * Optional overrides in .env / Vercel:
  *   NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS=0x...
  *   NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=0x...
- *   NEXT_PUBLIC_ARC_ERC20_DECIMALS=18
+ *   NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS=0x...
+ *   NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS=0x...
  */
 const USDC_ARC_TESTNET = "0x3600000000000000000000000000000000000000"
+const EURC_ARC_TESTNET = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a"
 
 async function main() {
   const hre = require("hardhat")
@@ -23,47 +24,63 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners()
   console.log("[ARC//_DEPLOYER]", deployer.address)
 
-  const MockArcToken = await hre.ethers.getContractFactory("MockArcToken")
-  const token = await MockArcToken.deploy()
-  await token.waitForDeployment()
-  const tokenAddr = await token.getAddress()
-  console.log("[ARC//_TOKEN]", tokenAddr)
+  const MockSwapToken = await hre.ethers.getContractFactory("MockSwapToken")
+  const arc = await MockSwapToken.deploy("ARC Demo", "ARC", 18)
+  await arc.waitForDeployment()
+  const arcAddr = await arc.getAddress()
+  console.log("[ARC//_TOKEN_ARC]", arcAddr)
 
-  const rateNum = 684n
-  const rateDen = 1000n
+  const eth = await MockSwapToken.deploy("ETH Demo", "ETH", 18)
+  await eth.waitForDeployment()
+  const ethAddr = await eth.getAddress()
+  console.log("[ARC//_TOKEN_ETH]", ethAddr)
 
-  const BobbieArcSwap = await hre.ethers.getContractFactory("BobbieArcSwap")
-  const swap = await BobbieArcSwap.deploy(USDC_ARC_TESTNET, tokenAddr, rateNum, rateDen)
+  const wbtc = await MockSwapToken.deploy("WBTC Demo", "WBTC", 8)
+  await wbtc.waitForDeployment()
+  const wbtcAddr = await wbtc.getAddress()
+  console.log("[ARC//_TOKEN_WBTC]", wbtcAddr)
+
+  const BobbieMultiSwap = await hre.ethers.getContractFactory("BobbieMultiSwap")
+  const swap = await BobbieMultiSwap.deploy(USDC_ARC_TESTNET, EURC_ARC_TESTNET, arcAddr, ethAddr, wbtcAddr)
   await swap.waitForDeployment()
   const swapAddr = await swap.getAddress()
   console.log("[ARC//_SWAP]", swapAddr)
 
-  const tx = await token.setSwap(swapAddr)
-  await tx.wait()
-  console.log("[ARC//_LINKED] MockArcToken.swap = BobbieArcSwap")
+  for (const [label, token] of [
+    ["ARC", arc],
+    ["ETH", eth],
+    ["WBTC", wbtc],
+  ]) {
+    const tx = await token.setSwap(swapAddr)
+    await tx.wait()
+    console.log(`[ARC//_LINKED] ${label}.swap = BobbieMultiSwap`)
+  }
 
   const fs = require("fs")
   const path = require("path")
   const constantsDir = path.join(__dirname, "..", "src", "constants")
   const tsAddrType = "`0x${string}`"
-  fs.writeFileSync(
-    path.join(constantsDir, "bobbieSwapAddress.generated.ts"),
-    "// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\n" +
-      `export const bobbieSwapAddress = "${swapAddr}" as ${tsAddrType};\n`,
-    "utf8",
-  )
-  fs.writeFileSync(
-    path.join(constantsDir, "bobbieArcTokenAddress.generated.ts"),
-    "// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\n" +
-      `export const bobbieArcTokenAddress = "${tokenAddr}" as ${tsAddrType};\n`,
-    "utf8",
-  )
-  console.log("[ARC//_CODEGEN] src/constants/bobbieSwapAddress.generated.ts + bobbieArcTokenAddress.generated.ts")
+  const write = (file, varName, addr) => {
+    fs.writeFileSync(
+      path.join(constantsDir, file),
+      `// AUTO-GENERATED — scripts/deploy-bobbie-swap.js\n` +
+        `export const ${varName} = "${addr}" as ${tsAddrType};\n`,
+      "utf8",
+    )
+  }
+  write("bobbieSwapAddress.generated.ts", "bobbieSwapAddress", swapAddr)
+  write("bobbieArcTokenAddress.generated.ts", "bobbieArcTokenAddress", arcAddr)
+  write("bobbieEthTokenAddress.generated.ts", "bobbieEthTokenAddress", ethAddr)
+  write("bobbieWbtcTokenAddress.generated.ts", "bobbieWbtcTokenAddress", wbtcAddr)
+  console.log("[ARC//_CODEGEN] src/constants/*.generated.ts")
 
   console.log("\n--- Optional: override in .env / Vercel ---")
   console.log(`NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS=${swapAddr}`)
-  console.log(`NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=${tokenAddr}`)
+  console.log(`NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS=${arcAddr}`)
+  console.log(`NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS=${ethAddr}`)
+  console.log(`NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS=${wbtcAddr}`)
   console.log("NEXT_PUBLIC_ARC_ERC20_DECIMALS=18")
+  console.log("\nFund BobbieMultiSwap with USDC and EURC for reverse swaps (ARC/ETH/WBTC → stablecoin).")
 }
 
 main().catch((e) => {

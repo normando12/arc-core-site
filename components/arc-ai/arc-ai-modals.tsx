@@ -24,8 +24,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatUnits, parseUnits } from "viem"
-import { estimateMockReceive, SWAP_SYMBOLS, type SwapDraft, type SwapSymbol } from "@/lib/arc-ai-parse-swap"
-import { quoteArcOutFromUsdc, quoteUsdcOutFromArc } from "@/lib/bobbie-swap"
+import { SWAP_SYMBOLS, type SwapDraft, type SwapSymbol } from "@/lib/arc-ai-parse-swap"
+import {
+  isExecutableSwapPair,
+  isSwapPairReady,
+  quoteSwapOut,
+  SWAP_DECIMALS,
+} from "@/lib/bobbie-swap"
 import { cn } from "@/lib/utils"
 
 function parseHumanAmountUnits(amountRaw: string, decimals: number): bigint | null {
@@ -58,7 +63,6 @@ export function SwapModal({
   onConfirm,
   chainReady,
   swapConfigured,
-  arcTokenConfigured,
   balances,
 }: {
   open: boolean
@@ -70,8 +74,6 @@ export function SwapModal({
   chainReady: boolean
   /** `NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS` deployed */
   swapConfigured: boolean
-  /** ARC demo token address (env or codegen) — required for ARC → USDC */
-  arcTokenConfigured: boolean
   balances: Partial<Record<SwapSymbol, { balance: bigint; decimals: number }>>
 }) {
   const [from, setFrom] = useState<SwapSymbol>(DEFAULT_DRAFT.fromSymbol)
@@ -86,28 +88,17 @@ export function SwapModal({
     setAmount(d.fromAmount)
   }, [open, draft])
 
-  const bobbieDirected = (from === "USDC" && to === "ARC") || (from === "ARC" && to === "USDC")
-  const reverseDirected = from === "ARC" && to === "USDC"
-  const directedReady = swapConfigured && (!reverseDirected || arcTokenConfigured)
-
+  const pairSupported = isExecutableSwapPair(from, to)
+  const pairReady = isSwapPairReady(from, to)
   const receive = useMemo(() => {
     const fm = balances[from]
-    const n = Number.parseFloat(amount.replace(",", "."))
-    if (!Number.isFinite(n) || n <= 0 || !fm) return "—"
+    if (!pairSupported || !fm) return "—"
     const pu = parseHumanAmountUnits(amount, fm.decimals)
     if (pu === null || pu <= 0n) return "—"
-    if (from === "USDC" && to === "ARC") {
-      const arcWei = quoteArcOutFromUsdc(pu)
-      if (arcWei === 0n) return "—"
-      return `${formatUnits(arcWei, 18)} ARC`
-    }
-    if (from === "ARC" && to === "USDC") {
-      const usdcOut = quoteUsdcOutFromArc(pu)
-      if (usdcOut === 0n) return "—"
-      return `${formatUnits(usdcOut, 6)} USDC`
-    }
-    return estimateMockReceive(from, to, n)
-  }, [amount, from, to, balances])
+    const out = quoteSwapOut(from, to, pu)
+    if (out === 0n) return "—"
+    return `${formatUnits(out, SWAP_DECIMALS[to])} ${to}`
+  }, [amount, from, to, balances, pairSupported])
 
   const routeText = `${from} → ${from}/${to} pool → ${to}`
 
@@ -118,17 +109,17 @@ export function SwapModal({
   }, [amount, fromMeta])
 
   const insufficient =
-    bobbieDirected &&
+    pairSupported &&
     chainReady &&
-    directedReady &&
+    pairReady &&
     fromMeta != null &&
     parsedIn !== null &&
     parsedIn > fromMeta.balance
 
   const reviewDisabled =
     receive === "—" ||
-    !bobbieDirected ||
-    !directedReady ||
+    !pairSupported ||
+    !pairReady ||
     !chainReady ||
     fromMeta == null ||
     parsedIn === null ||
@@ -158,13 +149,13 @@ export function SwapModal({
             <span className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/5">
               <ArrowDownUp className="size-4 text-[var(--arc-neon-cyan)]" />
             </span>
-            Swap (USDC ↔ ARC)
+            Swap (multi-asset)
           </DialogTitle>
           <DialogDescription className="text-white/55">
-            On Arc Testnet a real <span className="text-white/75">BobbieArcSwap</span> call runs at a fixed rate:{" "}
-            <span className="text-white/75">USDC → ARC</span> pulls USDC (with <span className="text-white/75">approve</span> if needed)
-            and mints ARC demo tokens; <span className="text-white/75">ARC → USDC</span> burns those tokens from your balance and
-            returns USDC from the swap pool — one signature for the redeem path (no ERC-20 approve). Gas is paid in native USDC.
+            On Arc Testnet <span className="text-white/75">BobbieMultiSwap</span> runs at a fixed preview rate for{" "}
+            <span className="text-white/75">USDC, EUR (EURC), ETH, ARC, WBTC</span>. Selling USDC or EUR may require{" "}
+            <span className="text-white/75">approve</span>; selling demo tokens (ARC/ETH/WBTC) burns your balance in one tx. Gas is
+            native USDC.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-1">
@@ -181,13 +172,13 @@ export function SwapModal({
               Connect your wallet on <span className="text-white/90">Arc Testnet</span> to load balances and sign the swap.
             </div>
           ) : null}
-          {reverseDirected && swapConfigured && !arcTokenConfigured ? (
+          {pairSupported && swapConfigured && !pairReady ? (
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/95">
-              ARC → USDC needs the bundled <span className="font-mono text-white/80">bobbieArcTokenAddress.generated.ts</span> or{" "}
-              <span className="font-mono text-white/80">NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS</span>.
+              Configure demo token addresses — run <span className="font-mono text-white/80">npm run deploy:bobbieswap</span> or set env
+              vars for ARC, ETH, and WBTC demo tokens.
             </div>
           ) : null}
-          {bobbieDirected && fromMeta ? (
+          {pairSupported && fromMeta ? (
             <div className="text-xs text-white/45">
               Wallet <span className="text-white/70">{from}</span> balance (ERC-20 view):{" "}
               <span className="font-mono text-white/85">
@@ -195,10 +186,9 @@ export function SwapModal({
               </span>
             </div>
           ) : null}
-          {!bobbieDirected ? (
+          {!pairSupported ? (
             <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/55">
-              Only <span className="text-white/80">USDC ↔ ARC</span> is executable on-chain in this build. Pick USDC and ARC as “From” /
-              “To” (either direction).
+              This pair is not supported. Choose different “From” / “To” tokens.
             </div>
           ) : null}
           {insufficient ? (
@@ -269,12 +259,10 @@ export function SwapModal({
             title={
               insufficient
                 ? `Amount higher than wallet ${from} balance`
-                : !bobbieDirected
-                  ? "Pick USDC and ARC only"
-                  : !directedReady
-                    ? reverseDirected
-                      ? "Configure ARC token address"
-                      : "Configure swap contract address"
+                : !pairSupported
+                  ? "Unsupported pair"
+                  : !pairReady
+                    ? "Configure swap contract and demo tokens"
                     : undefined
             }
             className="bg-gradient-to-r from-[var(--arc-neon-cyan)] to-[var(--arc-neon-purple)] text-black hover:opacity-95 disabled:opacity-40"
@@ -304,6 +292,8 @@ export function TransactionConfirmModal({
   sendLabel,
   receiveLabel,
   txKind,
+  swapFrom,
+  swapTo,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -311,7 +301,9 @@ export function TransactionConfirmModal({
   onAccept: () => Promise<boolean>
   sendLabel: string
   receiveLabel: string
-  txKind: "swap_usdc_for_arc" | "swap_arc_for_usdc" | "governance_gm_burst"
+  txKind: "swap" | "governance_gm_burst"
+  swapFrom?: SwapSymbol
+  swapTo?: SwapSymbol
 }) {
   const [pending, setPending] = useState(false)
 
@@ -335,17 +327,16 @@ export function TransactionConfirmModal({
             Confirm transaction
           </DialogTitle>
           <DialogDescription className="text-white/55">
-            {txKind === "swap_usdc_for_arc" ? (
+            {txKind === "swap" ? (
               <>
-                Your wallet may first sign <span className="text-white/75">USDC.approve</span> for the swap contract, then{" "}
-                <span className="text-white/75">BobbieArcSwap.swapUsdcForArc</span>. USDC is debited from your balance; ARC demo tokens
-                are minted on Arc Testnet (USDC gas).
-              </>
-            ) : txKind === "swap_arc_for_usdc" ? (
-              <>
-                Your wallet signs{" "}
-                <span className="text-white/75">BobbieArcSwap.swapArcForUsdc</span>: ARC demo tokens are burned from your balance and USDC is
-                transferred from the swap pool — no ERC-20 approve needed (single user tx). Gas in native USDC.
+                Your wallet may sign{" "}
+                {swapFrom === "USDC" || swapFrom === "EUR" ? (
+                  <>
+                    <span className="text-white/75">{swapFrom}.approve</span> then{" "}
+                  </>
+                ) : null}
+                <span className="text-white/75">BobbieMultiSwap.swap</span> ({swapFrom} → {swapTo}). Demo tokens are minted or burned;
+                stablecoins move from your wallet or the swap pool. Gas in native USDC.
               </>
             ) : (
               <>
@@ -371,11 +362,9 @@ export function TransactionConfirmModal({
           <div className="mt-3 flex items-center justify-between text-white/60">
             <span>On-chain call</span>
             <span className="text-right text-xs text-white">
-              {txKind === "swap_usdc_for_arc"
-                ? "swapUsdcForArc()"
-                : txKind === "swap_arc_for_usdc"
-                  ? "swapArcForUsdc()"
-                  : "emitGmBurst()"}
+              {txKind === "swap" && swapFrom != null && swapTo != null
+                ? `swap(${swapFrom}→${swapTo})`
+                : "emitGmBurst()"}
             </span>
           </div>
           <div className="mt-3 flex items-center justify-between text-white/60">

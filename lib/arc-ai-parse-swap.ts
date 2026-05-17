@@ -1,4 +1,7 @@
-export const SWAP_SYMBOLS = ["USDC", "ETH", "ARC", "WBTC"] as const
+import { quoteSwapOut, SWAP_DECIMALS } from "@/lib/bobbie-swap"
+import { formatUnits, parseUnits } from "viem"
+
+export const SWAP_SYMBOLS = ["USDC", "EUR", "ETH", "ARC", "WBTC"] as const
 export type SwapSymbol = (typeof SWAP_SYMBOLS)[number]
 
 export type SwapDraft = {
@@ -11,6 +14,7 @@ export type SwapDraft = {
 function canonToken(raw: string): SwapSymbol | null {
   const x = raw.toLowerCase()
   if (x === "usdc") return "USDC"
+  if (x === "eur" || x === "eurc") return "EUR"
   if (x === "eth" || x === "weth") return "ETH"
   if (x === "arc") return "ARC"
   if (x === "wbtc" || x === "btc") return "WBTC"
@@ -18,8 +22,7 @@ function canonToken(raw: string): SwapSymbol | null {
 }
 
 /**
- * Detects natural-language swap intent (PT/EN), e.g. "troque 100 usdc por arc", "swap 50 USDC to ARC".
- * Expects: amount + fromToken + separator + toToken.
+ * Detects natural-language swap intent (PT/EN), e.g. "troque 100 usdc por arc", "swap 50 USDC to ETH".
  */
 export function parseSwapIntent(raw: string): SwapDraft | null {
   const n = raw
@@ -28,7 +31,7 @@ export function parseSwapIntent(raw: string): SwapDraft | null {
     .toLowerCase()
 
   const re =
-    /(\d+(?:[.,]\d+)?)\s*(usdc|eth|weth|arc|wbtc|btc)\s*(?:por|para|em|a|to|for|->|\/|→)\s*(usdc|eth|weth|arc|wbtc|btc)\b/
+    /(\d+(?:[.,]\d+)?)\s*(usdc|eurc?|eth|weth|arc|wbtc|btc)\s*(?:por|para|em|a|to|for|->|\/|→)\s*(usdc|eurc?|eth|weth|arc|wbtc|btc)\b/
 
   const m = n.match(re)
   if (!m) return null
@@ -44,18 +47,19 @@ export function parseSwapIntent(raw: string): SwapDraft | null {
   return { fromSymbol, toSymbol, fromAmount }
 }
 
-/** Mock spot rates for preview labels only. */
-const MOCK_RATE: Record<SwapSymbol, Partial<Record<SwapSymbol, number>>> = {
-  USDC: { ARC: 0.684, ETH: 0.0002172, WBTC: 0.0000112 },
-  ARC: { USDC: 1.4626, ETH: 0.0003175, WBTC: 0.0000164 },
-  ETH: { ARC: 3158, USDC: 4624, WBTC: 0.0516 },
-  WBTC: { ARC: 98140, USDC: 143650, ETH: 19.62 },
+export function estimateSwapReceive(from: SwapSymbol, to: SwapSymbol, amount: number): string {
+  if (from === to || amount <= 0) return "—"
+  try {
+    const pu = parseUnits(String(amount), SWAP_DECIMALS[from])
+    const out = quoteSwapOut(from, to, pu)
+    if (out === 0n) return "—"
+    return `${formatUnits(out, SWAP_DECIMALS[to])} ${to}`
+  } catch {
+    return "—"
+  }
 }
 
+/** @deprecated Use estimateSwapReceive */
 export function estimateMockReceive(from: SwapSymbol, to: SwapSymbol, amount: number): string {
-  const rate = MOCK_RATE[from]?.[to]
-  if (rate == null) return "—"
-  const out = amount * rate
-  const digits = out >= 1 ? 2 : out >= 0.0001 ? 6 : 8
-  return `${out.toFixed(digits)} ${to}`
+  return estimateSwapReceive(from, to, amount)
 }

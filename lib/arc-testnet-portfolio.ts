@@ -1,6 +1,8 @@
 import type { Address } from "viem"
 
 import { bobbieArcTokenAddress as bobbieArcTokenAddressGenerated } from "@/src/constants/bobbieArcTokenAddress.generated"
+import { bobbieEthTokenAddress as bobbieEthTokenAddressGenerated } from "@/src/constants/bobbieEthTokenAddress.generated"
+import { bobbieWbtcTokenAddress as bobbieWbtcTokenAddressGenerated } from "@/src/constants/bobbieWbtcTokenAddress.generated"
 
 /**
  * Arc Testnet token metadata for portfolio reads.
@@ -37,6 +39,9 @@ const USYC_META: ArcPortfolioTokenMeta = {
 /** Official Arc Testnet USDC ERC-20 interface (shared balance view with native gas). */
 export const ARC_TESTNET_USDC: ArcPortfolioTokenMeta = USDC_META
 
+/** Official Arc Testnet EURC (shown as EUR in swap UI). */
+export const ARC_TESTNET_EURC: ArcPortfolioTokenMeta = EURC_META
+
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address
 
 function optionalArcTokenMeta(): ArcPortfolioTokenMeta | null {
@@ -71,8 +76,42 @@ export function getBobbieArcTokenAddress(): Address | null {
   return arc?.address ?? null
 }
 
+function optionalDemoTokenMeta(
+  envKey: string,
+  generated: string | undefined,
+  symbol: string,
+  name: string,
+  decimals: number,
+): ArcPortfolioTokenMeta | null {
+  const raw = process.env[envKey]?.trim()
+  const addr =
+    raw?.startsWith("0x") && raw.length === 42 && raw.toLowerCase() !== ZERO_ADDR.toLowerCase()
+      ? (raw as Address)
+      : generated && generated.toLowerCase() !== ZERO_ADDR.toLowerCase()
+        ? (generated as Address)
+        : null
+  if (!addr) return null
+  return { symbol, name, address: addr, decimals }
+}
+
 /** Ordered list of Arc Testnet ERC-20 balances to show in portfolio UI. */
 export function buildArcPortfolioTokenList(): ArcPortfolioTokenMeta[] {
   const arc = optionalArcTokenMeta()
-  return arc ? [...[USDC_META, EURC_META, USYC_META], arc] : [USDC_META, EURC_META, USYC_META]
+  const eth = optionalDemoTokenMeta(
+    "NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS",
+    bobbieEthTokenAddressGenerated,
+    "ETH",
+    "ETH Demo",
+    18,
+  )
+  const wbtc = optionalDemoTokenMeta(
+    "NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS",
+    bobbieWbtcTokenAddressGenerated,
+    "WBTC",
+    "WBTC Demo",
+    8,
+  )
+  const base: ArcPortfolioTokenMeta[] = [USDC_META, EURC_META, USYC_META]
+  const demo = [arc, eth, wbtc].filter((x): x is ArcPortfolioTokenMeta => x != null)
+  return [...base, ...demo]
 }

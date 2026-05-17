@@ -1,45 +1,184 @@
 import type { Address } from "viem"
 
+import { bobbieArcTokenAddress as bobbieArcTokenAddressGenerated } from "@/src/constants/bobbieArcTokenAddress.generated"
+import { bobbieEthTokenAddress as bobbieEthTokenAddressGenerated } from "@/src/constants/bobbieEthTokenAddress.generated"
 import { bobbieSwapAddress as bobbieSwapAddressGenerated } from "@/src/constants/bobbieSwapAddress.generated"
+import { bobbieWbtcTokenAddress as bobbieWbtcTokenAddressGenerated } from "@/src/constants/bobbieWbtcTokenAddress.generated"
+import type { SwapSymbol } from "@/lib/arc-ai-parse-swap"
+import { ARC_TESTNET_EURC, ARC_TESTNET_USDC } from "@/lib/arc-testnet-portfolio"
 
-/** Same constants as `BobbieArcSwap` constructor / Arc AI preview rate (USDC → ARC). */
+/** Same constants as legacy `BobbieArcSwap` (USDC → ARC). */
 export const BOBBIE_SWAP_RATE_NUM = 684n
 export const BOBBIE_SWAP_RATE_DEN = 1000n
 
-/** ARC out (18 decimals wei) from USDC amount (6 decimals base units). Matches `BobbieArcSwap.quoteArcOut`. */
-export function quoteArcOutFromUsdc(usdcAmountBaseUnits: bigint): bigint {
-  if (usdcAmountBaseUnits <= 0n) return 0n
-  return (usdcAmountBaseUnits * BOBBIE_SWAP_RATE_NUM * 10n ** 12n) / BOBBIE_SWAP_RATE_DEN
+/** On-chain token ids in `BobbieMultiSwap`. */
+export const SWAP_TOKEN_ID: Record<SwapSymbol, number> = {
+  USDC: 0,
+  EUR: 1,
+  ARC: 2,
+  ETH: 3,
+  WBTC: 4,
 }
 
-/** USDC out (6 decimals) from ARC amount (18 decimals wei). Matches `BobbieArcSwap.quoteUsdcOut`. */
+/** Fixed rates (out per 1 in) — must match `BobbieMultiSwap._initRates`. */
+const SWAP_RATE: Record<SwapSymbol, Partial<Record<SwapSymbol, { num: bigint; den: bigint }>>> = {
+  USDC: {
+    ARC: { num: 684n, den: 1000n },
+    EUR: { num: 926n, den: 1000n },
+    ETH: { num: 2172n, den: 10_000_000n },
+    WBTC: { num: 112n, den: 10_000_000n },
+  },
+  EUR: {
+    USDC: { num: 108n, den: 100n },
+    ARC: { num: 74n, den: 100n },
+    ETH: { num: 234n, den: 1_000_000n },
+    WBTC: { num: 121n, den: 10_000_000n },
+  },
+  ARC: {
+    USDC: { num: 14626n, den: 10_000n },
+    EUR: { num: 1351n, den: 1000n },
+    ETH: { num: 3175n, den: 10_000_000n },
+    WBTC: { num: 164n, den: 10_000_000n },
+  },
+  ETH: {
+    ARC: { num: 3158n, den: 1n },
+    USDC: { num: 4624n, den: 1n },
+    EUR: { num: 4274n, den: 1n },
+    WBTC: { num: 516n, den: 10_000n },
+  },
+  WBTC: {
+    ARC: { num: 98140n, den: 1n },
+    USDC: { num: 143650n, den: 1n },
+    EUR: { num: 132870n, den: 1n },
+    ETH: { num: 1962n, den: 100n },
+  },
+}
+
+export const SWAP_DECIMALS: Record<SwapSymbol, number> = {
+  USDC: 6,
+  EUR: 6,
+  ARC: 18,
+  ETH: 18,
+  WBTC: 8,
+}
+
+export function isExecutableSwapPair(from: SwapSymbol, to: SwapSymbol): boolean {
+  if (from === to) return false
+  return SWAP_RATE[from]?.[to] != null
+}
+
+export function quoteSwapOut(from: SwapSymbol, to: SwapSymbol, amountIn: bigint): bigint {
+  if (amountIn <= 0n || from === to) return 0n
+  const r = SWAP_RATE[from]?.[to]
+  if (!r) return 0n
+  const inDec = SWAP_DECIMALS[from]
+  const outDec = SWAP_DECIMALS[to]
+  if (outDec >= inDec) {
+    const scale = 10n ** BigInt(outDec - inDec)
+    return (amountIn * r.num * scale) / r.den
+  }
+  const scale = 10n ** BigInt(inDec - outDec)
+  return (amountIn * r.num) / (r.den * scale)
+}
+
+/** ARC out (18 decimals wei) from USDC amount (6 decimals base units). */
+export function quoteArcOutFromUsdc(usdcAmountBaseUnits: bigint): bigint {
+  return quoteSwapOut("USDC", "ARC", usdcAmountBaseUnits)
+}
+
+/** USDC out (6 decimals) from ARC amount (18 decimals wei). */
 export function quoteUsdcOutFromArc(arcAmountBaseUnits: bigint): bigint {
-  if (arcAmountBaseUnits <= 0n) return 0n
-  return (arcAmountBaseUnits * BOBBIE_SWAP_RATE_DEN) / (BOBBIE_SWAP_RATE_NUM * 10n ** 12n)
+  return quoteSwapOut("ARC", "USDC", arcAmountBaseUnits)
 }
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address
 
-export function getBobbieSwapAddress(): Address | null {
-  const raw = process.env.NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS?.trim()
+function resolveAddress(envKey: string, generated: string | undefined): Address | null {
+  const raw = process.env[envKey]?.trim()
   if (raw?.startsWith("0x") && raw.length === 42 && raw.toLowerCase() !== ZERO.toLowerCase()) {
     return raw as Address
   }
-  if (
-    bobbieSwapAddressGenerated &&
-    bobbieSwapAddressGenerated.toLowerCase() !== ZERO.toLowerCase()
-  ) {
-    return bobbieSwapAddressGenerated as Address
+  if (generated && generated.toLowerCase() !== ZERO.toLowerCase()) {
+    return generated as Address
   }
   return null
+}
+
+export function getBobbieSwapAddress(): Address | null {
+  return resolveAddress("NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS", bobbieSwapAddressGenerated)
 }
 
 export function isBobbieSwapConfigured(): boolean {
   return getBobbieSwapAddress() !== null
 }
 
-/** Minimal ABI for BobbieArcSwap two-way swap + quotes */
+export function getBobbieArcTokenAddress(): Address | null {
+  return resolveAddress("NEXT_PUBLIC_ARC_ERC20_TOKEN_ADDRESS", bobbieArcTokenAddressGenerated)
+}
+
+export function getBobbieEthTokenAddress(): Address | null {
+  return resolveAddress("NEXT_PUBLIC_BOBBIE_ETH_TOKEN_ADDRESS", bobbieEthTokenAddressGenerated)
+}
+
+export function getBobbieWbtcTokenAddress(): Address | null {
+  return resolveAddress("NEXT_PUBLIC_BOBBIE_WBTC_TOKEN_ADDRESS", bobbieWbtcTokenAddressGenerated)
+}
+
+/** ERC-20 pulled/pushed by the swap contract for each symbol. */
+export function getSwapTokenAddress(symbol: SwapSymbol): Address | null {
+  switch (symbol) {
+    case "USDC":
+      return ARC_TESTNET_USDC.address
+    case "EUR":
+      return ARC_TESTNET_EURC.address
+    case "ARC":
+      return getBobbieArcTokenAddress()
+    case "ETH":
+      return getBobbieEthTokenAddress()
+    case "WBTC":
+      return getBobbieWbtcTokenAddress()
+    default:
+      return null
+  }
+}
+
+/** Mintable demo tokens need their address configured for inbound swaps. */
+export function isSwapMintableConfigured(symbol: SwapSymbol): boolean {
+  if (symbol === "USDC" || symbol === "EUR") return true
+  return getSwapTokenAddress(symbol) !== null
+}
+
+export function isSwapPairReady(from: SwapSymbol, to: SwapSymbol): boolean {
+  if (!isExecutableSwapPair(from, to)) return false
+  if (!isBobbieSwapConfigured()) return false
+  return isSwapMintableConfigured(from) && isSwapMintableConfigured(to)
+}
+
+/** Minimal ABI for BobbieMultiSwap (+ legacy USDC↔ARC). */
 export const bobbieSwapAbi = [
+  {
+    type: "function",
+    name: "swap",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "fromId", type: "uint8" },
+      { name: "toId", type: "uint8" },
+      { name: "amountIn", type: "uint256" },
+      { name: "minOut", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "quoteOut",
+    stateMutability: "view",
+    inputs: [
+      { name: "fromId", type: "uint8" },
+      { name: "toId", type: "uint8" },
+      { name: "amountIn", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
   {
     type: "function",
     name: "swapUsdcForArc",
