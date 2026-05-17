@@ -1271,7 +1271,7 @@ export function ArcAICopilot() {
 
   const hero = useMemo(() => {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center px-6 pt-10 pb-6">
+      <motion.div className="mx-auto flex w-full max-w-5xl flex-col items-center px-6 py-4 sm:py-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/60">
             <Bot className="size-3.5 text-[var(--arc-neon-cyan)]" />
@@ -1307,10 +1307,10 @@ export function ArcAICopilot() {
           </div>
         </motion.div>
 
-        <div className="mt-10 w-full">
+        <div className="mt-6 w-full max-h-[min(32vh,240px)] shrink overflow-hidden">
           <FuturisticHeroArt />
         </div>
-      </div>
+      </motion.div>
     )
   }, [handleWalletClick, send, walletBusy])
 
@@ -1319,7 +1319,7 @@ export function ArcAICopilot() {
       <div className="flex h-full min-h-0">
         <aside className="relative hidden h-full min-h-0 w-[272px] shrink-0 border-r border-white/10 lg:block">
           <div className="h-full min-h-0">
-            <ScrollArea className="h-full overscroll-y-contain">
+            <ScrollArea className="arc-ai-scrollbar-hidden h-full overscroll-y-contain">
               <LeftSidebar
                 active={active}
                 onNav={(k) => setActive(k)}
@@ -1404,7 +1404,7 @@ export function ArcAICopilot() {
                       <SheetTitle>Wallet panel</SheetTitle>
                       <SheetDescription>Balances, gas, and insights</SheetDescription>
                     </SheetHeader>
-                    <ScrollArea className="h-svh">
+                    <ScrollArea className="arc-ai-scrollbar-hidden h-svh">
                       <RightSidebar
                         connected={isConnected}
                         walletAddress={address}
@@ -1422,7 +1422,7 @@ export function ArcAICopilot() {
 
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {active !== "chat" ? (
-              <ScrollArea className="min-h-0 flex-1 overscroll-y-contain">
+              <ScrollArea className="arc-ai-scrollbar-hidden min-h-0 flex-1 overscroll-y-contain">
                 {active === "portfolio" ? (
                   <PortfolioView portfolio={portfolio} walletAddress={address} onSwitchToArc={handleSwitchToArc} />
                 ) : null}
@@ -1442,9 +1442,12 @@ export function ArcAICopilot() {
             ) : (
               <>
                 <div
-                  ref={chatScrollRef}
-                  onScroll={onChatScroll}
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+                  ref={chatStarted ? chatScrollRef : undefined}
+                  onScroll={chatStarted ? onChatScroll : undefined}
+                  className={cn(
+                    "min-h-0 flex-1 overscroll-y-contain",
+                    chatStarted ? "arc-ai-scrollbar-hidden overflow-y-auto" : "overflow-hidden",
+                  )}
                 >
                   <AnimatePresence mode="wait">
                     {!chatStarted ? (
@@ -1499,8 +1502,8 @@ export function ArcAICopilot() {
                               </div>
                             </motion.div>
                           ) : null}
-                        </div>
-                      </motion.div>
+                      </div>
+                    </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
@@ -1579,7 +1582,7 @@ export function ArcAICopilot() {
 
         <aside className="relative hidden h-full min-h-0 w-[320px] shrink-0 border-l border-white/10 lg:block xl:w-[360px]">
           <div className="h-full min-h-0">
-            <ScrollArea className="h-full overscroll-y-contain">
+            <ScrollArea className="arc-ai-scrollbar-hidden h-full overscroll-y-contain">
               <RightSidebar
                 connected={isConnected}
                 walletAddress={address}

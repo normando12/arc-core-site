@@ -145,6 +145,33 @@
   --arc-glass-border: color-mix(in oklab, white 14%, transparent);
 }
 
+/* Hide scrollbars inside Bobbie AI shell (scroll still works where enabled). */
+.arc-ai-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.arc-ai-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.arc-ai-mesh [data-slot='scroll-area-scrollbar'] {
+  display: none !important;
+}
+
+.arc-ai-mesh [data-slot='scroll-area-viewport'] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.arc-ai-mesh [data-slot='scroll-area-viewport']::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .arc-ai-mesh {
   background-color: #020204;
   background-image:

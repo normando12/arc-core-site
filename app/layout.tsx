@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark ${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`dark h-full overflow-hidden ${sans.variable} ${mono.variable}`}>
       <body
         className={`${sans.className} h-svh overflow-hidden antialiased bg-[#020204] text-white [--font-sans:var(--font-arc-ai-sans)] [--font-mono:var(--font-arc-ai-mono)]`}
       >
