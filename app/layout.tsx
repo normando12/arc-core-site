@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${sans.variable} ${mono.variable}`}>
       <body
-        className={`${sans.className} antialiased bg-[#020204] text-white [--font-sans:var(--font-arc-ai-sans)] [--font-mono:var(--font-arc-ai-mono)]`}
+        className={`${sans.className} h-svh overflow-hidden antialiased bg-[#020204] text-white [--font-sans:var(--font-arc-ai-sans)] [--font-mono:var(--font-arc-ai-mono)]`}
       >
         <Web3Provider>
           {children}

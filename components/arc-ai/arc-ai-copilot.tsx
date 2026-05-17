@@ -1186,7 +1186,21 @@ export function ArcAICopilot() {
     { kind: "none" } | { kind: "swap"; payload: SwapConfirmPayload } | { kind: "gm_burst" }
   >({ kind: "none" })
 
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  const stickChatToBottomRef = useRef(true)
+
+  const scrollChatToEnd = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = chatScrollRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior })
+  }, [])
+
+  const onChatScroll = useCallback(() => {
+    const el = chatScrollRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickChatToBottomRef.current = distanceFromBottom < 96
+  }, [])
 
   const openSwapManual = useCallback(() => {
     setSwapDraft(null)
@@ -1203,14 +1217,16 @@ export function ArcAICopilot() {
   const chatStarted = messages.length > 0
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" })
-  }, [messages, pending, active])
+    if (active !== "chat" || !chatStarted || !stickChatToBottomRef.current) return
+    scrollChatToEnd(pending ? "auto" : "smooth")
+  }, [active, chatStarted, messages.length, pending, scrollChatToEnd])
 
   const send = useCallback(
     (text: string) => {
       const trimmed = text.trim()
       if (!trimmed) return
 
+      stickChatToBottomRef.current = true
       const user: ChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed }
       setMessages((m) => [...m, user])
       setInput("")
@@ -1299,11 +1315,11 @@ export function ArcAICopilot() {
   }, [handleWalletClick, send, walletBusy])
 
   return (
-    <div className="arc-ai-mesh min-h-svh text-white">
-      <div className="flex min-h-svh">
-        <aside className="relative hidden w-[272px] shrink-0 border-r border-white/10 lg:block">
-          <div className="sticky top-0 h-svh">
-            <ScrollArea className="h-full">
+    <div className="arc-ai-mesh h-svh overflow-hidden text-white">
+      <div className="flex h-full min-h-0">
+        <aside className="relative hidden h-full min-h-0 w-[272px] shrink-0 border-r border-white/10 lg:block">
+          <div className="h-full min-h-0">
+            <ScrollArea className="h-full overscroll-y-contain">
               <LeftSidebar
                 active={active}
                 onNav={(k) => setActive(k)}
@@ -1319,8 +1335,8 @@ export function ArcAICopilot() {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-black/20 backdrop-blur-xl">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="z-20 shrink-0 border-b border-white/10 bg-black/20 backdrop-blur-xl">
             <div className="flex items-center gap-2 px-3 py-3 lg:px-4">
               <Sheet>
                 <SheetTrigger asChild>
@@ -1404,9 +1420,9 @@ export function ArcAICopilot() {
             </div>
           </header>
 
-          <main className="flex min-h-0 flex-1 flex-col">
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {active !== "chat" ? (
-              <ScrollArea className="min-h-0 flex-1">
+              <ScrollArea className="min-h-0 flex-1 overscroll-y-contain">
                 {active === "portfolio" ? (
                   <PortfolioView portfolio={portfolio} walletAddress={address} onSwitchToArc={handleSwitchToArc} />
                 ) : null}
@@ -1425,8 +1441,12 @@ export function ArcAICopilot() {
               </ScrollArea>
             ) : (
               <>
-                <ScrollArea className="min-h-0 flex-1">
-                  <AnimatePresence mode="popLayout">
+                <div
+                  ref={chatScrollRef}
+                  onScroll={onChatScroll}
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+                >
+                  <AnimatePresence mode="wait">
                     {!chatStarted ? (
                       <motion.div key="hero" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                         {hero}
@@ -1437,7 +1457,6 @@ export function ArcAICopilot() {
                           {messages.map((m) => (
                             <motion.div
                               key={m.id}
-                              layout
                               initial={{ opacity: 0, y: 8 }}
                               animate={{ opacity: 1, y: 0 }}
                               className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
@@ -1480,14 +1499,13 @@ export function ArcAICopilot() {
                               </div>
                             </motion.div>
                           ) : null}
-                          <div ref={bottomRef} />
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </ScrollArea>
+                </div>
 
-                <div className="border-t border-white/10 bg-black/25 backdrop-blur-xl">
+                <div className="shrink-0 border-t border-white/10 bg-black/25 backdrop-blur-xl">
                   <div className="mx-auto w-full max-w-3xl px-4 py-4">
                     <div className="mb-3 flex flex-wrap justify-center gap-2">
                       {PROMPT_SUGGESTIONS.map((s) => (
@@ -1559,9 +1577,9 @@ export function ArcAICopilot() {
           </main>
         </div>
 
-        <aside className="relative hidden w-[320px] shrink-0 border-l border-white/10 lg:block xl:w-[360px]">
-          <div className="sticky top-0 h-svh">
-            <ScrollArea className="h-full">
+        <aside className="relative hidden h-full min-h-0 w-[320px] shrink-0 border-l border-white/10 lg:block xl:w-[360px]">
+          <div className="h-full min-h-0">
+            <ScrollArea className="h-full overscroll-y-contain">
               <RightSidebar
                 connected={isConnected}
                 walletAddress={address}
