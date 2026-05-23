@@ -1,4 +1,5 @@
 import type { SwapDraft } from "@/lib/arc-ai-parse-swap"
+import type { WalletCommandKind } from "@/lib/command-parser"
 
 export type ArcLiveStatus =
   | {
@@ -19,4 +20,6 @@ export type ArcLiveStatus =
 export type ChatApiResponse = {
   reply: string
   swapDraft: SwapDraft | null
+  walletCommand?: WalletCommandKind | null
+  loadingHint?: string | null
 }

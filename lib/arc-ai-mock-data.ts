@@ -1,11 +1,11 @@
 export type NavKey = "chat" | "portfolio" | "transactions" | "bridge" | "settings"
 
 export const PROMPT_SUGGESTIONS = [
+  "Qual token mais usei hoje?",
+  "Quanto gastei em taxas?",
+  "Meu saldo total",
   "Swap 100 USDC to ARC",
   "Bridge assets to ARC Testnet",
-  "Show my portfolio",
-  "Stake my ARC tokens",
-  "Find trending tokens",
 ] as const
 
 export const MOCK_TOKENS = [

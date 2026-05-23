@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner"
 
 import { AiExecutionProgressModal, SwapModal, TransactionConfirmModal, type SwapConfirmPayload } from "@/components/arc-ai/arc-ai-modals"
+import { AssistantMessageBody, WalletChatLoading } from "@/components/arc-ai/wallet-chat-loading"
 import { FuturisticHeroArt } from "@/components/arc-ai/futuristic-hero-art"
 import { PortfolioChart } from "@/components/arc-ai/portfolio-chart"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -55,6 +56,13 @@ import { estimateSwapReceive, SWAP_SYMBOLS, type SwapDraft, type SwapSymbol } fr
 import type { ArcLiveStatus, ChatApiResponse } from "@/lib/arc-api-types"
 import { buildAssistantReply } from "@/lib/bobbie-chat-logic"
 import {
+  formatBalanceSummaryResponse,
+  formatWalletDisconnectedResponse,
+  formatWrongChainResponse,
+} from "@/lib/ai-response-formatter"
+import { parseWalletCommand, walletCommandLoadingLabel } from "@/lib/command-parser"
+import type { WalletCommandKind } from "@/lib/command-parser"
+import {
   AI_INSIGHT,
   GAS_TRACKER,
   MOCK_TXS,
@@ -74,6 +82,7 @@ import { shortHex } from "@/lib/arc-log"
 import { playTxSuccessSound } from "@/lib/tx-success-sound"
 import { cn } from "@/lib/utils"
 import { useArcLiveStatus } from "@/hooks/use-arc-live-status"
+import { useWalletBalanceHook } from "@/hooks/use-wallet-balance-hook"
 import {
   useArcPortfolioBalances,
   type ArcPortfolioRow,
@@ -94,23 +103,6 @@ type ChatMessage = {
   id: string
   role: "user" | "assistant"
   content: string
-}
-
-function TypewriterText({ text }: { text: string }) {
-  const [n, setN] = useState(0)
-
-  useEffect(() => {
-    setN(0)
-    let i = 0
-    const id = window.setInterval(() => {
-      i += 1
-      setN(Math.min(i, text.length))
-      if (i >= text.length) window.clearInterval(id)
-    }, 14)
-    return () => window.clearInterval(id)
-  }, [text])
-
-  return <span>{text.slice(0, n)}</span>
 }
 
 function NavItem({
@@ -149,16 +141,6 @@ function NavItem({
         )}
       />
     </button>
-  )
-}
-
-function TypingDots() {
-  return (
-    <div className="flex items-center gap-1.5 px-1 py-0.5" aria-label="Assistant is typing">
-      <span className="arc-ai-typing-dot size-2 rounded-full bg-[var(--arc-neon-cyan)]/80" />
-      <span className="arc-ai-typing-dot size-2 rounded-full bg-[var(--arc-neon-purple)]/80" />
-      <span className="arc-ai-typing-dot size-2 rounded-full bg-[var(--arc-neon-magenta)]/70" />
-    </div>
   )
 }
 
@@ -890,6 +872,8 @@ export function ArcAICopilot() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [pending, setPending] = useState(false)
+  const [pendingWalletCommand, setPendingWalletCommand] = useState<WalletCommandKind | null>(null)
+  const [pendingLoadingHint, setPendingLoadingHint] = useState<string | null>(null)
   const [voiceOn, setVoiceOn] = useState(false)
 
   const { address, isConnected } = useAccount()
@@ -907,6 +891,7 @@ export function ArcAICopilot() {
 
   const { data: arcLive, loading: arcLiveLoading } = useArcLiveStatus()
   const portfolio = useArcPortfolioBalances()
+  const walletBalances = useWalletBalanceHook()
   const swapBalanceMap = useMemo(() => buildSwapBalanceMap(portfolio), [portfolio])
   const chainReady = Boolean(isConnected && address && chainId === arcTestnet.id)
 
@@ -1235,11 +1220,15 @@ export function ArcAICopilot() {
       const trimmed = text.trim()
       if (!trimmed) return
 
+      const detectedWalletCmd = parseWalletCommand(trimmed)
+
       stickChatToBottomRef.current = true
       const user: ChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed }
       setMessages((m) => [...m, user])
       setInput("")
       setPending(true)
+      setPendingWalletCommand(detectedWalletCmd?.kind ?? null)
+      setPendingLoadingHint(detectedWalletCmd ? walletCommandLoadingLabel(detectedWalletCmd.kind) : null)
 
       window.setTimeout(() => {
         void (async () => {
@@ -1249,7 +1238,11 @@ export function ArcAICopilot() {
             const r = await fetch("/api/chat", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ message: trimmed }),
+              body: JSON.stringify({
+                message: trimmed,
+                walletAddress: address,
+                chainId,
+              }),
             })
             if (!r.ok) throw new Error("chat")
             const j = (await r.json()) as ChatApiResponse
@@ -1257,8 +1250,17 @@ export function ArcAICopilot() {
             swapDraftResult = j.swapDraft
           } catch {
             const local = buildAssistantReply(trimmed)
-            content = local.text
-            swapDraftResult = local.swapDraft
+            if (detectedWalletCmd?.kind === "total_balance") {
+              if (walletBalances.kind === "disconnected") content = formatWalletDisconnectedResponse()
+              else if (walletBalances.kind === "wrong_chain") content = formatWrongChainResponse()
+              else content = formatBalanceSummaryResponse(walletBalances.rows)
+            } else if (detectedWalletCmd) {
+              content =
+                "Não consegui consultar a blockchain agora. Verifique sua conexão e tente novamente."
+            } else {
+              content = local.text
+              swapDraftResult = local.swapDraft
+            }
           }
           const assistant: ChatMessage = {
             id: crypto.randomUUID(),
@@ -1267,15 +1269,17 @@ export function ArcAICopilot() {
           }
           setMessages((m) => [...m, assistant])
           setPending(false)
+          setPendingWalletCommand(null)
+          setPendingLoadingHint(null)
 
           if (swapDraftResult) {
             setSwapDraft(swapDraftResult)
             setSwapOpen(true)
           }
         })()
-      }, 650)
+      }, detectedWalletCmd ? 420 : 650)
     },
-    [],
+    [address, chainId, walletBalances],
   )
 
   const hero = useMemo(() => {
@@ -1495,21 +1499,13 @@ export function ArcAICopilot() {
                                   )}
                                 </div>
                                 <div className="text-[13px] text-white/85">
-                                  {m.role === "assistant" ? <TypewriterText text={m.content} /> : m.content}
+                                  {m.role === "assistant" ? <AssistantMessageBody text={m.content} /> : m.content}
                                 </div>
                               </div>
                             </motion.div>
                           ))}
                           {pending ? (
-                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                              <div className="arc-ai-glass rounded-2xl border border-white/10 px-4 py-3">
-                                <div className="mb-2 flex items-center gap-2 text-[11px] text-white/45">
-                                  <Bot className="size-3.5 text-[var(--arc-neon-cyan)]" />
-                                  Bobbie AI
-                                </div>
-                                <TypingDots />
-                              </div>
-                            </motion.div>
+                            <WalletChatLoading commandKind={pendingWalletCommand} hint={pendingLoadingHint} />
                           ) : null}
                       </div>
                     </motion.div>
