@@ -69,7 +69,7 @@ export async function handleWalletCommand(
     }
   } catch {
     return {
-      text: "Não consegui ler os dados on-chain agora. Tente novamente em instantes.",
+      text: "Could not read on-chain data right now. Please try again in a moment.",
       walletCommand: cmd.kind,
     }
   }

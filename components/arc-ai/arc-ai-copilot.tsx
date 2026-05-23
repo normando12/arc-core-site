@@ -1256,7 +1256,7 @@ export function ArcAICopilot() {
               else content = formatBalanceSummaryResponse(walletBalances.rows)
             } else if (detectedWalletCmd) {
               content =
-                "Não consegui consultar a blockchain agora. Verifique sua conexão e tente novamente."
+                "Could not reach the blockchain right now. Check your connection and try again."
             } else {
               content = local.text
               swapDraftResult = local.swapDraft

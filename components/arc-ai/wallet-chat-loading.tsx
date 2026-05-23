@@ -51,7 +51,7 @@ export function WalletChatLoading({
   commandKind?: WalletCommandKind | null
   hint?: string | null
 }) {
-  const label = hint ?? (commandKind ? walletCommandLoadingLabel(commandKind) : "Bobbie AI está pensando…")
+  const label = hint ?? (commandKind ? walletCommandLoadingLabel(commandKind) : "Bobbie AI is thinking…")
 
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">

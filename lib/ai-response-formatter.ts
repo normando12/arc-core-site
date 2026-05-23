@@ -8,16 +8,16 @@ type BalanceLine = Pick<WalletBalanceRow, "symbol" | "formatted" | "balance" | "
 export function formatMostUsedTokenResponse(summary: TokenUsageSummary): string {
   if (summary.totalInteractions === 0) {
     if (summary.todayOnly) {
-      return "Não encontrei interações com tokens na sua wallet hoje na ARC Network. Faça um swap ou transferência e pergunte de novo."
+      return "No token interactions found for your wallet today on ARC Network. Try a swap or transfer and ask again."
     }
-    return "Ainda não há histórico de interações com tokens registrado para esta wallet na ARC Network."
+    return "No token interaction history is registered for this wallet on ARC Network yet."
   }
 
-  const period = summary.todayOnly ? " hoje" : ""
-  const txWord = summary.count === 1 ? "transação" : "transações"
+  const period = summary.todayOnly ? " today" : ""
+  const txWord = summary.count === 1 ? "transaction" : "transactions"
 
   if (summary.count === 1 && summary.runnersUp.length === 0) {
-    return `O token que você mais utilizou${period} foi ${summary.symbol} com ${summary.count} ${txWord}.`
+    return `The token you used most${period} was ${summary.symbol} with ${summary.count} ${txWord}.`
   }
 
   const runners =
@@ -25,26 +25,26 @@ export function formatMostUsedTokenResponse(summary: TokenUsageSummary): string 
       ? ` (${summary.runnersUp.map((r) => `${r.symbol}: ${r.count}`).join(", ")})`
       : ""
 
-  return `O token que você mais utilizou${period} foi ${summary.symbol} com ${summary.count} ${txWord}${runners}.`
+  return `The token you used most${period} was ${summary.symbol} with ${summary.count} ${txWord}${runners}.`
 }
 
 export function formatGasFeesResponse(summary: GasFeeSummary): string {
-  const period = summary.todayOnly ? "Hoje você gastou" : "Você gastou no total"
+  const period = summary.todayOnly ? "Today you spent" : "You spent in total"
   const txNote =
     summary.transactionCount === 0
       ? ""
       : summary.transactionCount === 1
-        ? " (1 transação)"
-        : ` (${summary.transactionCount} transações)`
+        ? " (1 transaction)"
+        : ` (${summary.transactionCount} transactions)`
 
   if (summary.transactionCount === 0) {
     if (summary.todayOnly) {
-      return "Hoje você ainda não pagou taxas de gas na ARC Network com esta wallet."
+      return "You haven't paid any gas fees on ARC Network with this wallet today."
     }
-    return "Não encontrei taxas de gas pagas por esta wallet no histórico recente da ARC Network."
+    return "No gas fees paid by this wallet were found in recent ARC Network history."
   }
 
-  return `${period} ${summary.totalUsdc} USDC em taxas na ARC Network${txNote}.`
+  return `${period} ${summary.totalUsdc} USDC in fees on ARC Network${txNote}.`
 }
 
 export function formatBalanceSummaryResponse(rows: BalanceLine[] | OnChainBalanceRow[]): string {
@@ -53,17 +53,17 @@ export function formatBalanceSummaryResponse(rows: BalanceLine[] | OnChainBalanc
 
   if (nonZero.length === 0) {
     const listed = ordered.map((r) => `${r.symbol}: 0`).join("\n")
-    return `Seu saldo atual é:\n${listed}\n\nConecte-se à Arc Testnet e use o faucet se precisar de USDC para gas.`
+    return `Your current balance is:\n${listed}\n\nConnect to Arc Testnet and use the faucet if you need USDC for gas.`
   }
 
   const lines = ordered.map((r) => `${r.formatted} ${r.symbol}`)
-  return `Seu saldo atual é:\n${lines.join("\n")}`
+  return `Your current balance is:\n${lines.join("\n")}`
 }
 
 export function formatWalletDisconnectedResponse(): string {
-  return "Conecte sua wallet na Arc Testnet para eu consultar saldos, taxas e histórico on-chain."
+  return "Connect your wallet on Arc Testnet so I can read balances, fees, and on-chain history."
 }
 
 export function formatWrongChainResponse(): string {
-  return "Troque para a Arc Testnet (chain 5042002) para eu ler seus dados on-chain."
+  return "Switch to Arc Testnet (chain 5042002) so I can read your on-chain data."
 }

@@ -70,11 +70,11 @@ export function parseWalletCommand(raw: string): ParsedWalletCommand | null {
 export function walletCommandLoadingLabel(kind: WalletCommandKind): string {
   switch (kind) {
     case "most_used_token":
-      return "Analisando transações na ARC Network…"
+      return "Analyzing transactions on ARC Network…"
     case "gas_fees":
-      return "Calculando taxas de gas em USDC…"
+      return "Calculating gas fees in USDC…"
     case "total_balance":
-      return "Consultando saldos on-chain…"
+      return "Fetching on-chain balances…"
   }
 }
 
