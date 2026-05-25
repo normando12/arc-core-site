@@ -82,6 +82,7 @@ import { shortHex } from "@/lib/arc-log"
 import { playTxSuccessSound } from "@/lib/tx-success-sound"
 import { cn } from "@/lib/utils"
 import { useArcLiveStatus } from "@/hooks/use-arc-live-status"
+import { useVoiceInput } from "@/hooks/use-voice-input"
 import { useWalletBalanceHook } from "@/hooks/use-wallet-balance-hook"
 import {
   useArcPortfolioBalances,
@@ -874,7 +875,6 @@ export function ArcAICopilot() {
   const [pending, setPending] = useState(false)
   const [pendingWalletCommand, setPendingWalletCommand] = useState<WalletCommandKind | null>(null)
   const [pendingLoadingHint, setPendingLoadingHint] = useState<string | null>(null)
-  const [voiceOn, setVoiceOn] = useState(false)
 
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -1282,6 +1282,16 @@ export function ArcAICopilot() {
     [address, chainId, walletBalances],
   )
 
+  const sendRef = useRef(send)
+  sendRef.current = send
+
+  const { isListening, isSupported, toggleListening } = useVoiceInput({
+    disabled: pending,
+    onInterimTranscript: setInput,
+    onFinalTranscript: (text) => sendRef.current(text),
+    onError: (description) => toast.error("Voice input", { description }),
+  })
+
   const hero = useMemo(() => {
     return (
       <motion.div className="mx-auto flex w-full max-w-5xl flex-col items-center px-6 py-4 sm:py-6">
@@ -1548,17 +1558,29 @@ export function ArcAICopilot() {
                               type="button"
                               size="icon"
                               variant="ghost"
+                              disabled={pending}
                               className={cn(
                                 "rounded-xl text-white/60 hover:bg-white/10 hover:text-white",
-                                voiceOn && "text-[var(--arc-neon-cyan)]",
+                                isListening && "text-[var(--arc-neon-cyan)] animate-pulse",
+                                !isSupported && "opacity-40",
                               )}
                               onClick={() => {
-                                setVoiceOn((v) => !v)
-                                toast.message("Voice capture", {
-                                  description: voiceOn ? "Mic preview off." : "Mic preview on (no audio stored).",
-                                })
+                                if (!isSupported) {
+                                  toast.error("Voice input", {
+                                    description: "Your browser does not support voice commands. Use Chrome or Edge.",
+                                  })
+                                  return
+                                }
+                                if (pending) return
+                                toggleListening()
                               }}
-                              aria-pressed={voiceOn}
+                              aria-pressed={isListening}
+                              aria-label={isListening ? "Stop listening" : "Start voice command"}
+                              title={
+                                isListening
+                                  ? "Listening… click to stop"
+                                  : "Speak a command (same as typing)"
+                              }
                             >
                               <Mic className="size-4" />
                             </Button>
