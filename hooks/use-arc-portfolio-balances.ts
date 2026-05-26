@@ -1,9 +1,9 @@
 "use client"
 
-import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useMemo } from "react"
 import { erc20Abi, formatUnits } from "viem"
-import { useAccount, useChainId, useReadContracts } from "wagmi"
+import { useAccount, useChainId, usePublicClient, useReadContracts } from "wagmi"
 import { arcTestnet } from "@/lib/chains/arc-testnet"
 import {
   buildSwapPortfolioTokenList,
@@ -14,6 +14,7 @@ import {
   bobbieSwapAbi,
   getBobbieSwapAddress,
   mergePortfolioTokenAddresses,
+  resolveBobbieSwapAddress,
 } from "@/lib/bobbie-swap"
 import type { Address } from "viem"
 
@@ -46,8 +47,20 @@ export function useArcPortfolioBalances(): ArcPortfolioState {
   const chainId = useChainId()
   const ZERO = "0x0000000000000000000000000000000000000000" as Address
   const baseTokens = useMemo(() => buildSwapPortfolioTokenList(), [])
-  const swapAddr = getBobbieSwapAddress()
+  const publicClient = usePublicClient({ chainId: arcTestnet.id })
+  const fallbackSwapAddr = getBobbieSwapAddress()
   const onArc = Boolean(isConnected && address && chainId === arcTestnet.id)
+
+  const { data: resolvedSwap } = useQuery({
+    queryKey: ["bobbie-swap-address", fallbackSwapAddr, arcTestnet.id],
+    queryFn: async () => {
+      if (!publicClient) return null
+      return resolveBobbieSwapAddress(publicClient)
+    },
+    enabled: Boolean(publicClient && onArc && fallbackSwapAddr),
+    staleTime: 60_000,
+  })
+  const swapAddr = resolvedSwap?.address ?? fallbackSwapAddr
 
   const demoAddrContracts = useMemo(() => {
     if (!swapAddr || !onArc) return []

@@ -258,8 +258,14 @@ export async function detectBobbieSwapVariant(
   client: PublicClient,
   swapAddr: Address,
 ): Promise<BobbieSwapVariant> {
-  // MultiSwap only — legacy BobbieArcSwap has no quoteOut(fromId, toId, amount).
+  // MultiSwap has `eurc` + `quoteOut`; legacy BobbieArcSwap only has USDC/ARC helpers.
   try {
+    const eurcAddr = await client.readContract({
+      address: swapAddr,
+      abi: bobbieSwapAbi,
+      functionName: "eurc",
+    })
+    if (eurcAddr.toLowerCase() === ZERO.toLowerCase()) return "unknown"
     await client.readContract({
       address: swapAddr,
       abi: bobbieSwapAbi,
@@ -281,6 +287,35 @@ export async function detectBobbieSwapVariant(
   } catch {
     return "unknown"
   }
+}
+
+function collectBobbieSwapAddressCandidates(): Address[] {
+  const out: Address[] = []
+  const push = (raw: string | undefined) => {
+    if (!raw?.startsWith("0x") || raw.length !== 42) return
+    if (raw.toLowerCase() === ZERO.toLowerCase()) return
+    const addr = raw as Address
+    if (!out.some((a) => a.toLowerCase() === addr.toLowerCase())) out.push(addr)
+  }
+  push(process.env.NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS?.trim())
+  push(bobbieSwapAddressGenerated)
+  return out
+}
+
+/** Prefer BobbieMultiSwap when env points at a legacy deployment. */
+export async function resolveBobbieSwapAddress(
+  client: PublicClient,
+): Promise<{ address: Address; variant: BobbieSwapVariant } | null> {
+  const candidates = collectBobbieSwapAddressCandidates()
+  if (candidates.length === 0) return null
+
+  let legacyFallback: { address: Address; variant: "legacy" } | null = null
+  for (const address of candidates) {
+    const variant = await detectBobbieSwapVariant(client, address)
+    if (variant === "multi") return { address, variant }
+    if (variant === "legacy" && !legacyFallback) legacyFallback = { address, variant }
+  }
+  return legacyFallback
 }
 
 export type BobbieSwapWriteCall =

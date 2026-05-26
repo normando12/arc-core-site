@@ -97,6 +97,7 @@ import {
   isSwapPairReady,
   SWAP_DECIMALS,
   buildBobbieSwapWriteCall,
+  resolveBobbieSwapAddress,
 } from "@/lib/bobbie-swap"
 import { buildArcPortfolioTokenList } from "@/lib/arc-testnet-portfolio"
 
@@ -979,7 +980,12 @@ export function ArcAICopilot() {
   const executeSwap = useCallback(
     async (payload: SwapConfirmPayload): Promise<boolean> => {
       const { fromSymbol, toSymbol } = payload
-      const swapAddr = getBobbieSwapAddress()
+      if (!publicClient) {
+        toast.error("RPC unavailable. Try again in a moment.")
+        return false
+      }
+      const resolved = await resolveBobbieSwapAddress(publicClient)
+      const swapAddr = resolved?.address ?? getBobbieSwapAddress()
       if (!swapAddr) {
         toast.error("Swap contract not configured", {
           description: "Run npm run deploy:bobbieswap and set NEXT_PUBLIC_BOBBIE_SWAP_ADDRESS.",
@@ -1025,11 +1031,6 @@ export function ArcAICopilot() {
         }
       } else if (chainId !== arcTestnet.id) {
         toast.error("This wallet cannot switch networks from the app.")
-        return false
-      }
-
-      if (!publicClient) {
-        toast.error("RPC unavailable. Try again in a moment.")
         return false
       }
 
