@@ -216,6 +216,20 @@ export const bobbieSwapAbi = [
   },
   {
     type: "function",
+    name: "usdc",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "eurc",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "arcToken",
     stateMutability: "view",
     inputs: [],
@@ -244,11 +258,13 @@ export async function detectBobbieSwapVariant(
   client: PublicClient,
   swapAddr: Address,
 ): Promise<BobbieSwapVariant> {
+  // MultiSwap only — legacy BobbieArcSwap has no quoteOut(fromId, toId, amount).
   try {
     await client.readContract({
       address: swapAddr,
       abi: bobbieSwapAbi,
-      functionName: "eurc",
+      functionName: "quoteOut",
+      args: [SWAP_TOKEN_ID.USDC, SWAP_TOKEN_ID.ETH, 1_000_000n],
     })
     return "multi"
   } catch {
